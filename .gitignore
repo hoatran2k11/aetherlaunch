@@ -1,0 +1,63 @@
+# ---------- Node ----------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+*.tgz
+
+# ---------- Rust / Tauri ----------
+src-tauri/target/
+# Schema tự sinh khi build (capabilities/*.json trỏ tới đây nhưng không cần commit)
+src-tauri/gen/
+# Cargo.lock: GIỮ lại (đây là ứng dụng, không phải thư viện)
+
+# Bộ cài / bản build đầu ra
+dist/
+out/
+*.msi
+*.nsis
+*-setup.exe
+
+# ---------- Helper C++ (x86) ----------
+helper/build/
+*.obj
+*.o
+*.pdb
+*.ilk
+*.exp
+*.lib
+# Mọi .exe/.dll đều bỏ qua, TRỪ helper đã build mà `tauri build` cần để đóng gói
+*.exe
+*.dll
+!src-tauri/resources/samp_helper.exe
+
+# ---------- Môi trường / bí mật ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---------- Log, tạm ----------
+*.log
+*.tmp
+*.bak
+*.swp
+.cache/
+
+# ---------- Editor / IDE ----------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.sublime-*
+.vs/
+*.suo
+*.user
+
+# ---------- Hệ điều hành ----------
+.DS_Store
+Thumbs.db
+desktop.ini

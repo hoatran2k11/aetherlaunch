@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AetherLaunch</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app">
+
+  <!-- Titlebar tự vẽ (cửa sổ không viền) -->
+  <header class="titlebar" data-tauri-drag-region>
+    <div class="brand-mini"><span class="dot"></span>AetherLaunch</div>
+    <div class="win-btns">
+      <button id="wMin" title="Thu nhỏ"><span class="ic" data-i="min"></span></button>
+      <button id="wMax" title="Phóng to"><span class="ic" data-i="max"></span></button>
+      <button id="wClose" class="close" title="Đóng"><span class="ic" data-i="close"></span></button>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- Sidebar: đứng yên khi đổi tab nên blur không bị dựng lại -->
+    <aside class="sidebar glass">
+      <div class="logo">
+        <div class="logo-mark"><img id="logoImg" src="resources/app-icon.png" alt="" /><span id="logoTxt" hidden>AL</span></div>
+        <div><b>AetherLaunch</b><small>SA-MP Launcher</small></div>
+      </div>
+      <nav class="nav">
+        <button data-tab="play" class="active"><span class="ic" data-i="play"></span>Chơi ngay</button>
+        <button data-tab="servers"><span class="ic" data-i="dns"></span>Danh sách server</button>
+        <button data-tab="settings"><span class="ic" data-i="settings"></span>Cài đặt</button>
+        <button data-tab="about"><span class="ic" data-i="info"></span>Thông tin</button>
+      </nav>
+      <div class="side-foot"><span id="sideState" class="state"></span><span id="sideAddr">—</span></div>
+    </aside>
+
+    <main class="main">
+
+      <!-- ========== PLAY ========== -->
+      <section id="tab-play" class="view show">
+        <div class="glass hero">
+          <div class="hero-top">
+            <div class="hero-title">
+              <div class="eyebrow"><span id="srvDot" class="state"></span><span id="srvState">Đang kết nối…</span></div>
+              <h1 id="srvName">—</h1>
+              <p id="srvMode" class="muted">—</p>
+            </div>
+            <div class="hero-side">
+              <div class="sel-row">
+                <div class="dd" id="srvDd">
+                  <button id="ddBtn" class="dd-btn" type="button" aria-haspopup="listbox" aria-expanded="false" title="Chọn server">
+                    <span class="ic" data-i="dns"></span>
+                    <span class="dd-label" id="ddLabel">—</span>
+                    <span class="ic dd-caret" data-i="expand"></span>
+                  </button>
+                  <div id="ddMenu" class="dd-menu" role="listbox"></div>
+                </div>
+                <button id="btnManage" class="btn-icon sm" title="Quản lý server"><span class="ic" data-i="edit"></span></button>
+              </div>
+              <div class="chips" id="srvChips"></div>
+            </div>
+          </div>
+
+          <div class="stats">
+            <div class="stat"><label>Địa chỉ</label><b id="stAddr">—</b></div>
+            <div class="stat">
+              <label>Người chơi</label><b id="stPlayers">—</b>
+              <div class="bar"><i id="stBar"></i></div>
+            </div>
+            <div class="stat"><label>Ping</label><b id="stPing">—</b></div>
+            <div class="stat"><label>Mật khẩu</label><b id="stLock">—</b></div>
+          </div>
+
+          <div class="actions">
+            <button id="btnPlay" class="btn-play"><span class="ic" data-i="play"></span><span class="t">CHƠI NGAY</span><span class="spinner"></span></button>
+            <button id="btnRefresh" class="btn-icon" title="Làm mới"><span class="ic" data-i="refresh"></span></button>
+            <div id="playMsg" class="msg"></div>
+          </div>
+        </div>
+
+        <div class="glass plist">
+          <div class="plist-head">
+            <h2><span class="ic" data-i="person"></span>Người chơi <small id="plCount"></small></h2>
+            <input id="plSearch" class="field slim" placeholder="Tìm tên…" />
+          </div>
+          <!-- Header cố định, chỉ vùng danh sách bên dưới mới cuộn -->
+          <div class="pl-cols"><span>Tên</span><span>Điểm</span></div>
+          <div class="pl-scroll" id="plBody"></div>
+        </div>
+      </section>
+
+      <!-- ========== SERVERS ========== -->
+      <section id="tab-servers" class="view">
+        <div class="glass srv-head">
+          <div>
+            <h2>Danh sách server</h2>
+            <p class="muted small">Chọn server để chơi, hoặc thêm / sửa mật khẩu và mã hoá ký tự.</p>
+          </div>
+          <button id="btnAddSrv" class="btn"><span class="ic" data-i="add"></span>Thêm server</button>
+        </div>
+        <div id="serverList" class="server-list"></div>
+      </section>
+
+      <!-- ========== SETTINGS ========== -->
+      <section id="tab-settings" class="view">
+        <div class="glass pad form">
+          <h2 class="h-row">Cài đặt</h2>
+
+          <label class="lbl">Đường dẫn gta_sa.exe</label>
+          <div class="row">
+            <input id="setPath" class="field grow" placeholder="D:\GTA San Andreas\gta_sa.exe" spellcheck="false" />
+            <button id="btnBrowse" class="btn"><span class="ic" data-i="folder"></span>Chọn…</button>
+          </div>
+          <div id="gameCheck" class="badges"></div>
+
+          <label class="lbl">Tên nhân vật</label>
+          <input id="setName" class="field" placeholder="Max_Bennett" />
+          <div id="nameHint" class="hint">Bắt buộc có dấu gạch dưới (_), dài 3–20 ký tự. VD: Max_Bennett</div>
+
+          <div class="form-actions"><button id="btnSave" class="btn primary">Lưu cài đặt</button></div>
+        </div>
+      </section>
+
+      <!-- ========== ABOUT ========== -->
+      <section id="tab-about" class="view center">
+        <div class="glass glow-card about">
+          <div class="avatar"><img id="avatarImg" src="resources/avatar.jpg" alt="" /><span id="avatarTxt" hidden>M</span></div>
+          <h1>Max Bennett</h1>
+          <div class="handle">aoh20119</div>
+          <p class="muted">Nhà phát triển AetherLaunch</p>
+          <div class="chips center">
+            <span class="chip">Tauri v2</span><span class="chip">Rust</span><span class="chip">C++ x86 helper</span><span class="chip">v0.1.0</span>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- Modal thêm / sửa server -->
+<div id="modal" class="modal-back" aria-hidden="true">
+  <div class="glass modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <h2 id="mTitle">Thêm server</h2>
+    <div class="fgrid">
+      <div class="fld full"><label for="mName">Tên gợi nhớ (tuỳ chọn)</label><input id="mName" class="field" placeholder="VD: GTA Viet Nam" /></div>
+      <div class="fld"><label for="mHost">IP / Domain</label><input id="mHost" class="field" spellcheck="false" placeholder="sv.example.com" /></div>
+      <div class="fld"><label for="mPort">Port</label><input id="mPort" class="field" inputmode="numeric" placeholder="7777" /></div>
+      <div class="fld full"><label for="mPass">Mật khẩu server (nếu có)</label><input id="mPass" class="field" type="password" autocomplete="off" /></div>
+      <div class="fld full"><label for="mEnc">Mã hoá ký tự</label>
+        <select id="mEnc" class="field">
+          <option value="windows-1252">Windows-1252 (mặc định)</option>
+          <option value="windows-1258">Windows-1258 (Tiếng Việt)</option>
+          <option value="windows-1250">Windows-1250</option>
+          <option value="windows-1251">Windows-1251 (Cyrillic)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button id="mCancel" class="btn">Huỷ</button>
+      <button id="mSave" class="btn primary">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+<script src="app.js"></script>
+</body>
+</html>
