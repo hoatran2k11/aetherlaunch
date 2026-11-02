@@ -34,6 +34,8 @@ function paintIcons(root = document) {
   });
 }
 paintIcons();
+// Chỉ ghi DOM khi nội dung thật sự đổi -> không dựng lại / nhấp nháy khi chuyển tab
+function setHtml(el, html) { if (el.__h === html) return false; el.__h = html; el.innerHTML = html; return true; }
 
 // ---------- Logo / avatar: link cứng trong index.html, lỗi thì quay về chữ cái ----------
 function imgFallback(imgId, txtId) {
@@ -103,7 +105,7 @@ function go(name) {
   $$('.nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   $$('.view').forEach(v => v.classList.toggle('show', v.id === 'tab-' + name));
   toggleDd(false);
-  if (name === 'play' && Date.now() - lastFetch > 4000) refreshStatus();
+  if (name === 'play' && Date.now() - lastFetch > 4000) refreshStatus(true);
   if (name === 'servers') queryServers();
   if (name === 'settings') fillSettings();
 }
@@ -187,8 +189,8 @@ function renderStatus(s) {
   $('#stPing').innerHTML = `<span class="${pingClass(ms)}">${ms} ms</span>`;
   $('#stLock').textContent = s.password ? '🔒 Có' : 'Không';
   const r = s.rules || {};
-  $('#srvChips').innerHTML = ['version', 'mapname', 'worldtime', 'weather', 'weburl'].filter(k => r[k])
-    .map(k => `<span class="chip">${esc(k === 'weburl' || k === 'version' ? r[k] : `${k}: ${r[k]}`)}</span>`).join('');
+  setHtml($('#srvChips'), ['version', 'mapname', 'worldtime', 'weather', 'weburl'].filter(k => r[k])
+    .map(k => `<span class="chip">${esc(k === 'weburl' || k === 'version' ? r[k] : `${k}: ${r[k]}`)}</span>`).join(''));
   lastStatus = s;
   loadPlayers(s); // chạy nền, không chặn thẻ trạng thái
 }
@@ -226,12 +228,12 @@ function renderPlayers() {
   $('#plCount').textContent = lastPlayers.length ? `(${lastPlayers.length})` : '';
   const body = $('#plBody');
   if (list.length) {
-    body.innerHTML = list.map(p => `<div class="pl-row"><span class="nm">${esc(p.name)}</span><span class="sc">${p.score}</span></div>`).join('');
+    setHtml(body, list.map(p => `<div class="pl-row"><span class="nm">${esc(p.name)}</span><span class="sc">${p.score}</span></div>`).join(''));
     return;
   }
   const msg = plLoading ? 'Đang tải danh sách người chơi…' : (lastError || (q ? 'Không tìm thấy người chơi' : 'Chưa có dữ liệu'));
   const canRetry = !plLoading && lastError && lastStatus && lastStatus.players > 0 && lastStatus.players <= 100;
-  body.innerHTML = `<div class="empty">${esc(msg)}${canRetry ? '<div><button id="plRetry" class="btn">Thử lại</button></div>' : ''}</div>`;
+  setHtml(body, `<div class="empty">${esc(msg)}${canRetry ? '<div><button id="plRetry" class="btn">Thử lại</button></div>' : ''}</div>`);
 }
 $('#plSearch').oninput = renderPlayers;
 $('#plBody').onclick = e => { if (e.target.closest('#plRetry') && lastStatus) loadPlayers(lastStatus); };
@@ -286,10 +288,14 @@ function buildServerList() {
 }
 function paintCard(i) {
   const el = $('#sv-' + i), sv = cfg.servers[i]; if (!el || !sv) return;
-  el.innerHTML = srvInner(i, sv); el.classList.toggle('sel', i === cfg.selected); paintIcons(el);
+  if (setHtml(el, srvInner(i, sv))) paintIcons(el);
+  el.classList.toggle('sel', i === cfg.selected);
 }
 function paintAllCards() { cfg.servers.forEach((_, i) => paintCard(i)); }
-async function queryServers() {
+let lastSrvQuery = 0;
+async function queryServers(force = false) {
+  if (!force && Date.now() - lastSrvQuery < 4000) return; // tránh dồn dập khi bấm qua lại giữa các tab
+  lastSrvQuery = Date.now();
   await Promise.all(cfg.servers.map(async (sv, i) => {
     try { srvInfo[srvKey(sv)] = { s: await invoke('query_server', { host: sv.host, port: sv.port, encoding: sv.encoding }) }; }
     catch { srvInfo[srvKey(sv)] = { err: true }; }
@@ -334,7 +340,7 @@ function saveModal() {
   const touchesSel = wasEmpty || (editIdx >= 0 && editIdx === cfg.selected);
   if (editIdx >= 0) cfg.servers[editIdx] = sv; else cfg.servers.push(sv);
   if (wasEmpty) cfg.selected = 0;
-  save(); buildServerList(); renderServerSelect(); closeModal(); queryServers();
+  save(); buildServerList(); renderServerSelect(); closeModal(); queryServers(true);
   if (touchesSel) { resetServerView(); refreshStatus(false, true); }
   toast(editIdx >= 0 ? 'Đã cập nhật server' : 'Đã thêm server');
 }
