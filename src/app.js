@@ -391,26 +391,38 @@ let gmReq = 0;
 function gameBadges(r) {
   return `<span class="badge ${r.exe ? 'ok' : 'no'}">${r.exe ? '✓' : '✕'} gta_sa.exe</span><span class="badge ${r.sampDll ? 'ok' : 'no'}">${r.sampDll ? '✓' : '✕'} samp.dll</span>`;
 }
+let gmExeOk = false;
+// Nút Xong chỉ bật khi file gta_sa.exe hợp lệ VÀ tên nhân vật hợp lệ
+function gmUpdate() {
+  const nameOk = validName(normName($('#gmName').value));
+  $('#gmNameHint').classList.toggle('bad', !nameOk);
+  $('#gmOk').disabled = !(gmExeOk && nameOk);
+}
 async function gmCheck() {
   const p = $('#gmPath').value.trim(), my = ++gmReq;
-  $('#gmOk').disabled = true;
+  gmExeOk = false; gmUpdate();
   if (!p) { $('#gmCheck').innerHTML = ''; return; }
   try {
     const r = await invoke('check_game', { exePath: p });
     if (my !== gmReq) return;
     $('#gmCheck').innerHTML = gameBadges(r) + (r.exe && !r.sampDll ? '<span class="hint">Thiếu samp.dll – hãy cài SA-MP/open.mp client vào thư mục game.</span>' : '');
-    $('#gmOk').disabled = !r.exe;
+    gmExeOk = !!r.exe; gmUpdate();
   } catch { if (my === gmReq) $('#gmCheck').innerHTML = ''; }
 }
-function openGameModal() { $('#gmPath').value = cfg.gtaPath || ''; $('#gmCheck').innerHTML = ''; $('#gmOk').disabled = true; showBack($('#gameModal')); gmCheck(); }
+function openGameModal() {
+  $('#gmPath').value = cfg.gtaPath || ''; $('#gmName').value = cfg.playerName; $('#gmCheck').innerHTML = '';
+  gmExeOk = false; gmUpdate(); showBack($('#gameModal')); gmCheck();
+}
 function finishGameModal() { cfg.askedGame = true; save(); hideBack($('#gameModal')); }
-function skipGame() { finishGameModal(); toast('Bạn có thể chọn gta_sa.exe sau trong Cài đặt'); }
+function skipGame() { finishGameModal(); toast('Bạn có thể chọn gta_sa.exe và đổi tên nhân vật sau trong Cài đặt'); }
 function confirmGame() {
   if ($('#gmOk').disabled) return;
-  cfg.gtaPath = $('#gmPath').value.trim(); finishGameModal(); toast('Đã lưu đường dẫn gta_sa.exe');
+  cfg.gtaPath = $('#gmPath').value.trim(); cfg.playerName = normName($('#gmName').value);
+  finishGameModal(); toast('Đã lưu. Bạn có thể đổi tên nhân vật trong Cài đặt bất cứ lúc nào.');
 }
 $('#gmBrowse').onclick = async () => { const f = await pickGameExe(); if (f) { $('#gmPath').value = f; gmCheck(); } };
 $('#gmPath').oninput = gmCheck;
+$('#gmName').oninput = gmUpdate;
 $('#gmSkip').onclick = skipGame;
 $('#gmOk').onclick = confirmGame;
 $('#gameModal').onmousedown = e => { if (e.target.id === 'gameModal') skipGame(); };

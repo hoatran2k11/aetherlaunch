@@ -265,3 +265,5 @@ select.field { appearance: none; -webkit-appearance: none; padding-right: 42px; 
 .modal .lead b { color: var(--txt); font-weight: 600; }
 .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; filter: none; }
 .fld .badges { margin-top: 12px; min-height: 26px; }
+
+.fld + .fld { margin-top: 18px; }

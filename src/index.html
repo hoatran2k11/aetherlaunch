@@ -167,7 +167,7 @@
 <div id="gameModal" class="modal-back" aria-hidden="true">
   <div class="glass modal" role="dialog" aria-modal="true" aria-labelledby="gmTitle">
     <h2 id="gmTitle">Chào mừng đến với AetherLaunch</h2>
-    <p class="lead">Hãy chọn file <b>gta_sa.exe</b> trong thư mục GTA San Andreas (đã cài SA-MP hoặc open.mp) để bắt đầu chơi.</p>
+    <p class="lead">Hãy chọn file <b>gta_sa.exe</b> trong thư mục GTA San Andreas (đã cài SA-MP hoặc open.mp) và đặt tên nhân vật để bắt đầu chơi.</p>
     <div class="fld">
       <label for="gmPath">Đường dẫn gta_sa.exe</label>
       <div class="row">
@@ -175,6 +175,11 @@
         <button id="gmBrowse" class="btn"><span class="ic" data-i="folder"></span>Chọn…</button>
       </div>
       <div id="gmCheck" class="badges"></div>
+    </div>
+    <div class="fld">
+      <label for="gmName">Tên nhân vật</label>
+      <input id="gmName" class="field" placeholder="Max_Bennett" autocomplete="off" />
+      <div id="gmNameHint" class="hint">Bắt buộc có dấu gạch dưới (_), dài 3–20 ký tự. VD: Max_Bennett</div>
     </div>
     <div class="modal-actions">
       <button id="gmSkip" class="btn">Để sau</button>
