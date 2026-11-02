@@ -62,9 +62,10 @@ input, select { user-select: text; }
 .side-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(0,0,0,.22); font-size: 12px; color: var(--mut); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 .main { position: relative; min-height: 0; }
-.view { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; padding: 2px 2px 14px 2px;
-  visibility: hidden; pointer-events: none; }
-.view.show { visibility: visible; pointer-events: auto; }
+/* Tab ẩn dùng display:none (KHÔNG dùng visibility:hidden): Chromium vẫn giữ lại backdrop-filter của phần tử
+   visibility:hidden thêm vài khung hình nên blur của tab cũ bị đè lên tab mới. display:none huỷ lớp blur ngay lập tức. */
+.view { position: absolute; inset: 0; display: none; flex-direction: column; gap: 16px; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; padding: 2px 2px 14px 2px; }
+.view.show { display: flex; }
 .view.center { justify-content: center; align-items: center; }
 /* QUAN TRỌNG: KHÔNG animate opacity/transform trên .view (tổ tiên của thẻ kính).
    Tổ tiên có opacity < 1 tạo ra "backdrop root" khiến backdrop-filter của thẻ con mất tác dụng
@@ -103,7 +104,6 @@ h2 small { color: var(--mut); font-weight: 400; }
 .good { color: var(--ok); } .mid { color: var(--warn); } .bad { color: var(--bad); }
 
 .actions { display: flex; align-items: center; gap: 14px; }
-.msg { font-size: 13px; color: var(--mut); min-height: 18px; } .msg.err { color: var(--bad); }
 
 /* ---------- Buttons ---------- */
 .btn-play {
@@ -166,9 +166,9 @@ h2 small { color: var(--mut); font-weight: 400; }
 
 /* ---------- Modal ---------- */
 /* Lớp phủ chỉ đổi màu nền (không dùng opacity) để thẻ kính bên trong giữ được blur khi mở/đóng. */
-.modal-back { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; visibility: hidden;
-  background: rgba(4,4,12,0); transition: background .25s var(--ease), visibility 0s linear .25s; }
-.modal-back.open { visibility: visible; background: rgba(4,4,12,.55); transition: background .25s var(--ease); }
+.modal-back { position: fixed; inset: 0; z-index: 40; display: none; place-items: center; background: rgba(4,4,12,0); transition: background .25s var(--ease); }
+.modal-back.show { display: grid; }
+.modal-back.open { background: rgba(4,4,12,.55); }
 .modal { width: min(480px, 92vw); max-height: 92vh; overflow-y: auto; padding: 24px 26px; opacity: 0; transform: translateY(14px) scale(.98);
   transition: opacity .25s var(--ease), transform .25s var(--ease); }
 .modal-back.open .modal { opacity: 1; transform: none; }
@@ -259,3 +259,9 @@ select.field { appearance: none; -webkit-appearance: none; padding-right: 42px; 
 .dd-txt b, .dd-txt small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dd-txt b { font-weight: 500; font-size: 13.5px; } .dd-txt small { font-size: 11px; color: var(--mut); }
 .dd-check { width: 18px; height: 18px; color: var(--acc); opacity: 0; flex: none; } .dd-item.on .dd-check { opacity: 1; }
+
+/* Modal hỏi vị trí game */
+.modal .lead { color: var(--mut); font-size: 13px; line-height: 1.55; margin: -8px 0 20px; }
+.modal .lead b { color: var(--txt); font-weight: 600; }
+.btn:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; filter: none; }
+.fld .badges { margin-top: 12px; min-height: 26px; }

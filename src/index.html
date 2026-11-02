@@ -75,7 +75,6 @@
           <div class="actions">
             <button id="btnPlay" class="btn-play"><span class="ic" data-i="play"></span><span class="t">CHƠI NGAY</span><span class="spinner"></span></button>
             <button id="btnRefresh" class="btn-icon" title="Làm mới"><span class="ic" data-i="refresh"></span></button>
-            <div id="playMsg" class="msg"></div>
           </div>
         </div>
 
@@ -130,7 +129,7 @@
           <div class="handle">aoh20119</div>
           <p class="muted">Nhà phát triển AetherLaunch</p>
           <div class="chips center">
-            <span class="chip">Tauri v2</span><span class="chip">Rust</span><span class="chip">C++ x86 helper</span><span class="chip">v0.1.0</span>
+            <span class="chip">Tauri v2</span><span class="chip">Rust</span><span class="chip">C++ x86 helper</span><span class="chip">v0.5.9</span>
           </div>
         </div>
       </section>
@@ -160,6 +159,26 @@
     <div class="modal-actions">
       <button id="mCancel" class="btn">Huỷ</button>
       <button id="mSave" class="btn primary">Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal hỏi vị trí gta_sa.exe (hiện khi mở app lần đầu) -->
+<div id="gameModal" class="modal-back" aria-hidden="true">
+  <div class="glass modal" role="dialog" aria-modal="true" aria-labelledby="gmTitle">
+    <h2 id="gmTitle">Chào mừng đến với AetherLaunch</h2>
+    <p class="lead">Hãy chọn file <b>gta_sa.exe</b> trong thư mục GTA San Andreas (đã cài SA-MP hoặc open.mp) để bắt đầu chơi.</p>
+    <div class="fld">
+      <label for="gmPath">Đường dẫn gta_sa.exe</label>
+      <div class="row">
+        <input id="gmPath" class="field grow" placeholder="D:\GTA San Andreas\gta_sa.exe" spellcheck="false" />
+        <button id="gmBrowse" class="btn"><span class="ic" data-i="folder"></span>Chọn…</button>
+      </div>
+      <div id="gmCheck" class="badges"></div>
+    </div>
+    <div class="modal-actions">
+      <button id="gmSkip" class="btn">Để sau</button>
+      <button id="gmOk" class="btn primary" disabled>Xác nhận</button>
     </div>
   </div>
 </div>
