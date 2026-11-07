@@ -30,7 +30,7 @@ npm run tauri icon app-icon.png     # tạo src-tauri/icons (chỉ cần 1 lần
 npm run tauri dev
 npm run tauri build                 # ra bộ cài NSIS
 ```
-Yêu cầu: Windows 10/11 (WebView2), Rust, Node.js, MSVC Build Tools.
+Yêu cầu: Windows 10/11 (WebView2), Rust (bản mới: Tauri 2.12 cần Rust ≥ 1.90, chạy `rustup update`), Node.js, MSVC Build Tools.
 
 ## Build lại helper (tuỳ chọn)
 Mở "x86 Native Tools Command Prompt" và chạy `helper\build_helper.bat`.
@@ -40,3 +40,47 @@ Helper PHẢI là 32-bit vì gta_sa.exe là 32-bit.
 - Tên người chơi BẮT BUỘC có dấu gạch dưới (vd `Max_Bennett`); dấu cách tự đổi thành `_`.
 - Server > 100 người không trả danh sách người chơi (giới hạn của SA-MP).
 - Nếu gta_sa.exe cần quyền Administrator, hãy chạy launcher bằng Run as administrator.
+
+## Forum
+- Tab **Forum**: mỗi server có danh sách link forum riêng (thêm / sửa / xoá, xoá có nút Hoàn tác).
+- Link mở trong cửa sổ trình duyệt tích hợp (lệnh Rust `open_forum`, chỉ nhận http/https). Cửa sổ này không có quyền gọi API Tauri.
+- Tối đa 3 link đầu của server đang chọn hiện thành nút nhanh ngay trên trang Chơi ngay.
+
+## Discord Rich Presence
+
+Hiển thị trên Discord của bạn: đang ở launcher hay đang chơi, tên server, tên nhân vật, số người chơi (x of y), thời gian đã chơi, địa chỉ server, nút mở forum.
+
+### 1. Tạo ứng dụng trên Discord Developer Portal
+1. Vào https://discord.com/developers/applications và đăng nhập, bấm **New Application**.
+2. Đặt tên (VD: `AetherLaunch`) rồi đồng ý điều khoản. **Tên này là dòng in đậm** hiện trên Discord ("Đang chơi AetherLaunch").
+3. Ở **General Information**: chọn ảnh **App Icon** (512×512), rồi bấm **Copy** ở mục **Application ID**.
+4. Vào **Rich Presence → Art Assets** → **Add Image(s)**: tải 2 ảnh, đặt tên (key) đúng như dưới đây (chữ thường, không dấu cách):
+   - `aether_logo`: logo AetherLaunch (ảnh lớn, nên 1024×1024, tối thiểu 512×512)
+   - `gta_sa`: biểu tượng GTA SA (ảnh nhỏ góc dưới)
+   Ảnh có thể mất vài phút mới hiện trên Discord.
+5. Không cần Bot, OAuth2, Client Secret hay gửi duyệt/xác minh: Rich Presence chỉ cần Application ID.
+
+### 2. Cấu hình `.env`
+```
+copy .env.example .env      (Windows)   hoặc   cp .env.example .env
+```
+Mở `.env`, dán Application ID vào `DISCORD_CLIENT_ID=`; các biến còn lại xem chú thích trong file.
+- Chạy `npm run tauri dev`: app đọc `.env` mỗi lần khởi động (đổi `.env` thì mở lại app).
+- Chạy `npm run tauri build`: giá trị `DISCORD_*` được nhúng vào file .exe, người dùng không cần file `.env`. Đổi `.env` thì build lại.
+- Muốn ghi đè khi chạy: đặt file `.env` cạnh file .exe hoặc đặt biến môi trường thật (được ưu tiên hơn giá trị nhúng).
+
+### 3. Kiểm tra
+1. Mở **ứng dụng Discord trên máy tính** (bản web/điện thoại không dùng được) và bật *User Settings → Activity Privacy → Share my activity / Display current activity as a status message*.
+2. Mở AetherLaunch → **Cài đặt**: dòng dưới công tắc *Discord Rich Presence* phải báo **Đã kết nối Discord**.
+3. Nút của chính bạn thường không hiện trên thẻ của bạn; hãy nhờ bạn bè hoặc tài khoản phụ xem.
+
+### Xử lý sự cố
+| Hiện tượng | Cách xử lý |
+|---|---|
+| Hint báo *Chưa cấu hình / không hợp lệ DISCORD_CLIENT_ID* | Kiểm tra `.env` (17–20 chữ số, không để chữ `your_application_id`), mở lại app |
+| *Chưa thấy Discord đang chạy* | Mở Discord desktop. Nếu launcher chạy bằng *Run as administrator* thì Discord cũng cần cùng quyền (hai bên khác quyền thường không kết nối được) |
+| Có trạng thái nhưng không có ảnh | Sai tên key ảnh, hoặc ảnh mới tải còn đang xử lý; kiểm tra tên trong Art Assets khớp `DISCORD_LARGE_IMAGE` / `DISCORD_SMALL_IMAGE` |
+| Hint báo *Discord từ chối trạng thái: …* | Đọc nội dung lỗi (thường do link nút sai); trạng thái được gửi lại ở lần cập nhật sau |
+| Không muốn hiện | Tắt công tắc *Discord Rich Presence* ở Cài đặt rồi Lưu: trạng thái bị xoá ngay |
+
+Ghi chú: Discord giới hạn tần suất cập nhật nên launcher chỉ gửi khi nội dung đổi và cách nhau tối thiểu 15 giây. Tên nhân vật và địa chỉ server hiển thị công khai khi đang chơi, hãy tắt công tắc nếu không muốn chia sẻ.

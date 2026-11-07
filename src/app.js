@@ -24,6 +24,8 @@ const ICONS = {
   min: 'M6 19h12v2H6z',
   max: 'M4 4h16v16H4V4zm2 2v12h12V6H6z',
   edit: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z',
+  forum: 'M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z',
+  open: 'M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z',
   expand: 'M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z',
   check: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
   person: 'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
@@ -40,7 +42,7 @@ function setHtml(el, html) { if (el.__h === html) return false; el.__h = html; e
 // ---------- Logo / avatar: link cứng trong index.html, lỗi thì quay về chữ cái ----------
 function imgFallback(imgId, txtId) {
   const img = $('#' + imgId), txt = $('#' + txtId);
-  const fail = () => { img.hidden = true; txt.hidden = false; };
+  const fail = () => { img.hidden = true; txt.hidden = false; img.parentElement.classList.add('fb'); };
   img.addEventListener('error', fail);
   if (img.complete && img.naturalWidth === 0) fail();
 }
@@ -51,9 +53,10 @@ imgFallback('logoImg', 'logoTxt'); imgFallback('avatarImg', 'avatarTxt');
 const KEY = 'samp-launcher.v1';
 const ENC = 'windows-1252';
 const DEFAULTS = {
-  gtaPath: '', askedGame: false, playerName: 'Max_Bennett', selected: 0,
-  servers: [{ name: 'GTA Viet Nam', host: 'sv.gtaviet.net', port: 7777, password: '', encoding: ENC }],
+  gtaPath: '', askedGame: false, playerName: 'Max_Bennett', selected: 0, discordRpc: true,
+  servers: [{ name: 'GTA Viet Nam', host: 'sv.gtaviet.net', port: 7777, password: '', encoding: ENC, forums: [] }],
 };
+const cleanLinks = a => (Array.isArray(a) ? a : []).filter(l => l && typeof l.url === 'string' && l.url).map(l => ({ name: String(l.name || '').slice(0, 60), url: l.url }));
 function load() {
   let raw = {};
   try { raw = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch { raw = {}; }
@@ -61,11 +64,12 @@ function load() {
   c.servers = (Array.isArray(raw.servers) ? raw.servers : DEFAULTS.servers).map(sv => ({
     name: sv.name || '', host: sv.host, port: Number(sv.port) || 7777,
     password: sv.password || '', encoding: sv.encoding || raw.encoding || ENC,
+    forums: cleanLinks(sv.forums), // (dữ liệu 'templates' của bản trước, nếu có, sẽ tự bị bỏ)
   }));
   // Chuyển cấu hình cũ (host/port/password nằm trong Cài đặt) vào danh sách server
   if (raw.host) {
     let i = c.servers.findIndex(s => s.host === raw.host && s.port === (Number(raw.port) || 7777));
-    if (i < 0) { c.servers.push({ name: '', host: raw.host, port: Number(raw.port) || 7777, password: raw.password || '', encoding: raw.encoding || ENC }); i = c.servers.length - 1; }
+    if (i < 0) { c.servers.push({ name: '', host: raw.host, port: Number(raw.port) || 7777, password: raw.password || '', encoding: raw.encoding || ENC, forums: [] }); i = c.servers.length - 1; }
     else if (raw.password && !c.servers[i].password) c.servers[i].password = raw.password;
     c.selected = i;
   }
@@ -86,11 +90,18 @@ const normName = n => n.trim().split(/\s+/).join('_');
 const validName = n => n.includes('_') && /^[A-Za-z0-9_\[\]()$@.=]{3,20}$/.test(n);
 const pingClass = ms => ms < 80 ? 'good' : ms < 160 ? 'mid' : 'bad';
 
-function toast(msg, kind = 'ok') {
+// opts: { ms: thời gian hiện (mặc định 10 giây), action: { label, fn } }
+function toast(msg, kind = 'ok', opts = {}) {
   const t = document.createElement('div');
   t.className = 'toast ' + (kind === 'err' ? 'err' : '');
-  t.textContent = msg; $('#toasts').append(t);
-  setTimeout(() => t.classList.add('out'), 10000); setTimeout(() => t.remove(), 10400);
+  const s = document.createElement('span'); s.textContent = msg; t.append(s);
+  if (opts.action) {
+    const b = document.createElement('button'); b.className = 'toast-act'; b.textContent = opts.action.label;
+    b.onclick = () => { opts.action.fn(); t.remove(); }; t.append(b);
+  }
+  $('#toasts').append(t);
+  const ms = opts.ms || 10000;
+  setTimeout(() => t.classList.add('out'), ms); setTimeout(() => t.remove(), ms + 400);
 }
 
 // ---------- Cửa sổ ----------
@@ -108,6 +119,7 @@ function go(name) {
   if (name === 'play' && Date.now() - lastFetch > 4000) refreshStatus(true);
   if (name === 'servers') queryServers();
   if (name === 'settings') fillSettings();
+  if (name === 'forum') renderForum();
 }
 $$('.nav button').forEach(b => b.onclick = () => go(b.dataset.tab));
 $('#btnManage').onclick = () => go('servers');
@@ -130,6 +142,7 @@ function renderServerSelect() {
        <span class="dd-txt"><b>${esc(label(s))}</b><small>${esc(srvKey(s))}</small></span>
        <span class="ic dd-check" data-i="check"></span></button>`).join('');
   paintIcons($('#ddMenu'));
+  renderPlayForums();
 }
 function toggleDd(open) {
   const dd = $('#srvDd'), want = open ?? !dd.classList.contains('open');
@@ -192,6 +205,8 @@ function renderStatus(s) {
   setHtml($('#srvChips'), ['version', 'mapname', 'worldtime', 'weather', 'weburl'].filter(k => r[k])
     .map(k => `<span class="chip">${esc(k === 'weburl' || k === 'version' ? r[k] : `${k}: ${r[k]}`)}</span>`).join(''));
   lastStatus = s;
+  rpcPush();
+  if (tab === 'forum') renderForum();
   loadPlayers(s); // chạy nền, không chặn thẻ trạng thái
 }
 
@@ -200,11 +215,13 @@ function renderOffline(e, sv) {
   $('#srvName').textContent = srvKey(sv);
   $('#srvMode').textContent = String(e);
   clearStats(); lastStatus = null; lastPlayers = []; lastError = 'Không truy vấn được server'; plLoading = false; renderPlayers();
+  rpcPush();
 }
 function renderNoServer() {
   $('#srvDot').className = 'state'; $('#sideState').className = 'state'; $('#srvState').textContent = 'Chưa có server';
   $('#srvName').textContent = '—'; $('#srvMode').textContent = 'Hãy thêm server ở tab Danh sách server';
   clearStats(); lastStatus = null; lastPlayers = []; lastError = 'Chưa có server nào'; plLoading = false; renderPlayers();
+  rpcPush();
 }
 
 // ---------- Danh sách người chơi (chỉ Tên + Điểm, lấy bằng opcode 'c', dự phòng 'd') ----------
@@ -252,6 +269,7 @@ $('#btnPlay').onclick = async () => {
   try {
     const m = await invoke('launch_game', { exePath: cfg.gtaPath, name: cfg.playerName, host: sv.host, port: sv.port, password: sv.password || null });
     toast(m);
+    rpcStartPlaying();
   } catch (e) { toast(String(e), 'err'); }
   finally { b.disabled = false; b.classList.remove('loading'); }
 };
@@ -343,7 +361,8 @@ function saveModal() {
   const host = $('#mHost').value.trim(), port = Number($('#mPort').value.trim() || 7777), pass = $('#mPass').value;
   if (!validHost(host) || !validPort(port)) return toast('IP/domain hoặc port không hợp lệ', 'err');
   if (!/^[^\s"]{0,64}$/.test(pass)) return toast('Mật khẩu không được chứa dấu cách hoặc dấu nháy', 'err');
-  const sv = { name: $('#mName').value.trim(), host, port, password: pass, encoding: $('#mEnc').value };
+  const prev = editIdx >= 0 ? cfg.servers[editIdx] : null;
+  const sv = { name: $('#mName').value.trim(), host, port, password: pass, encoding: $('#mEnc').value, forums: prev ? prev.forums : [] };
   const wasEmpty = cfg.servers.length === 0;
   const touchesSel = wasEmpty || (editIdx >= 0 && editIdx === cfg.selected);
   if (editIdx >= 0) cfg.servers[editIdx] = sv; else cfg.servers.push(sv);
@@ -356,17 +375,196 @@ $('#btnAddSrv').onclick = () => openModal(-1);
 $('#mCancel').onclick = closeModal;
 $('#mSave').onclick = saveModal;
 $('#modal').onmousedown = e => { if (e.target.id === 'modal') closeModal(); };
+const modalKeys = id => ({
+  modal: { close: closeModal, ok: saveModal }, gameModal: { close: skipGame, ok: confirmGame },
+  linkModal: { close: () => hideBack($('#linkModal')), ok: saveLink },
+})[id];
 document.addEventListener('keydown', e => {
   const m = $$('.modal-back.show').pop(); if (!m) return;
-  const isSrv = m.id === 'modal';
-  if (e.key === 'Escape') (isSrv ? closeModal : skipGame)();
-  if (e.key === 'Enter' && e.target.matches('.modal-back input')) (isSrv ? saveModal : confirmGame)();
+  const k = modalKeys(m.id); if (!k) return;
+  if (e.key === 'Escape') k.close();
+  if (e.key === 'Enter' && k.ok && e.target.matches('.modal-back input')) k.ok();
 });
+
+// =====================================================================
+// FORUM (link forum lưu riêng theo từng server, mở trong cửa sổ trình duyệt tích hợp)
+// =====================================================================
+// Thêm https:// nếu người dùng gõ thiếu; trả null nếu không phải link http(s) hợp lệ.
+// Dùng bộ phân tích URL của trình duyệt để bắt cả các dạng như "javascript:alert(1)" (sẽ thành host:port sai).
+function normUrl(u) {
+  u = String(u || '').trim();
+  if (!u || /\s/.test(u) || u.includes('\\')) return null;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) u = 'https://' + u;
+  try {
+    const p = new URL(u);
+    return /^https?:$/.test(p.protocol) && p.hostname && !p.username && !p.password ? u : null;
+  } catch { return null; }
+}
+const hostOf = u => { try { return new URL(u).hostname; } catch { return u; } };
+const sameUrl = (a, b) => a.replace(/\/+$/, '').toLowerCase() === b.replace(/\/+$/, '').toLowerCase();
+
+function afterForumChange() { save(); renderForum(); renderPlayForums(); }
+
+function itemRow(name, sub, btns, cls = '') {
+  return `<div class="item ${cls}"><div class="it-main"><div class="it-name">${esc(name)}</div><div class="it-sub">${esc(sub)}</div></div><div class="it-btns">${btns}</div></div>`;
+}
+const iconBtn = (act, idx, icon, title, extra = '') => `<button class="btn sq ${extra}" data-act="${act}" data-idx="${idx}" title="${title}"><span class="ic" data-i="${icon}"></span></button>`;
+
+function renderForum() {
+  const sv = cur();
+  const sel = $('#fSrv');
+  setHtml(sel, cfg.servers.map((s, i) => `<option value="${i}">${esc(label(s))}</option>`).join(''));
+  sel.disabled = !sv; if (sv) sel.value = String(cfg.selected);
+  $('#btnAddLink').disabled = !sv;
+
+  // --- link forum ---
+  let html;
+  if (!sv) html = '<div class="empty">Chưa có server – hãy thêm ở tab Danh sách server.</div>';
+  else {
+    html = sv.forums.map((l, i) => itemRow(l.name || hostOf(l.url), l.url,
+      `<button class="btn" data-act="open" data-idx="${i}"><span class="ic" data-i="open"></span>Mở</button>` + iconBtn('edit', i, 'edit', 'Sửa') + iconBtn('del', i, 'delete', 'Xoá', 'danger'))).join('');
+    const w = lastStatus && lastStatus.rules && lastStatus.rules.weburl, sug = w && normUrl(w);
+    if (sug && !sv.forums.some(l => sameUrl(l.url, sug)))
+      html += itemRow('Gợi ý từ server', sug, `<button class="btn" data-act="addsug" data-idx="0"><span class="ic" data-i="add"></span>Thêm</button>`, 'sug');
+    if (!html) html = '<div class="empty">Chưa có link forum cho server này. Bấm “Thêm link”.</div>';
+  }
+  if (setHtml($('#fLinks'), html)) paintIcons($('#fLinks'));
+
+}
+
+// Nút forum nhanh ngay trên trang Chơi ngay (tối đa 3 link đầu của server đang chọn)
+function renderPlayForums() {
+  const sv = cur(), box = $('#playForums');
+  const html = sv ? sv.forums.slice(0, 3).map((l, i) =>
+    `<button class="btn" data-fidx="${i}" title="${esc(l.url)}"><span class="ic" data-i="forum"></span>${esc(l.name || hostOf(l.url))}</button>`).join('') : '';
+  if (setHtml(box, html)) paintIcons(box);
+}
+
+async function openForum(l, sv) {
+  try { await invoke('open_forum', { url: l.url, title: l.name || hostOf(l.url) }); }
+  catch (e) { toast(String(e), 'err'); }
+}
+$('#playForums').onclick = e => { const b = e.target.closest('[data-fidx]'), sv = cur(); if (b && sv && sv.forums[+b.dataset.fidx]) openForum(sv.forums[+b.dataset.fidx], sv); };
+$('#fSrv').onchange = e => { selectServer(Number(e.target.value)); renderForum(); };
+
+// Xoá có nút Hoàn tác trong toast (10 giây để đổi ý)
+function removeWithUndo(arr, i, what) {
+  const [it] = arr.splice(i, 1); afterForumChange();
+  toast(`Đã xoá ${what}`, 'ok', { action: { label: 'Hoàn tác', fn: () => { arr.splice(Math.min(i, arr.length), 0, it); afterForumChange(); } } });
+}
+
+// ---- link forum ----
+let linkEdit = -1;
+function openLinkModal(i = -1) {
+  const sv = cur(); if (!sv) return toast('Hãy thêm server trước', 'err');
+  linkEdit = i; const l = sv.forums[i] || { name: '', url: '' };
+  $('#lTitle').textContent = i >= 0 ? 'Sửa link forum' : 'Thêm link forum';
+  $('#lName').value = l.name; $('#lUrl').value = l.url;
+  showBack($('#linkModal')); setTimeout(() => $('#lUrl').focus(), 60);
+}
+function saveLink() {
+  const sv = cur(), url = normUrl($('#lUrl').value);
+  if (!sv) return;
+  if (!url) return toast('Link không hợp lệ – cần dạng https://forum.example.com', 'err');
+  const l = { name: $('#lName').value.trim().slice(0, 60), url };
+  if (linkEdit >= 0) sv.forums[linkEdit] = l; else sv.forums.push(l);
+  hideBack($('#linkModal')); afterForumChange();
+}
+$('#btnAddLink').onclick = () => openLinkModal(-1);
+$('#lCancel').onclick = () => hideBack($('#linkModal'));
+$('#lSave').onclick = saveLink;
+$('#linkModal').onmousedown = e => { if (e.target.id === 'linkModal') hideBack(e.target); };
+$('#fLinks').onclick = e => {
+  const b = e.target.closest('button[data-act]'), sv = cur(); if (!b || !sv) return;
+  const i = Number(b.dataset.idx), act = b.dataset.act;
+  if (act === 'open') openForum(sv.forums[i], sv);
+  else if (act === 'edit') openLinkModal(i);
+  else if (act === 'del') removeWithUndo(sv.forums, i, `link “${sv.forums[i].name || hostOf(sv.forums[i].url)}”`);
+  else if (act === 'addsug') { sv.forums.push({ name: '', url: normUrl(lastStatus.rules.weburl) }); afterForumChange(); toast('Đã thêm link gợi ý', 'ok', { ms: 3000 }); }
+};
+
+// =====================================================================
+// DISCORD RICH PRESENCE (cấu hình DISCORD_CLIENT_ID trong .env, xem README)
+// =====================================================================
+const RPC_MIN_GAP = 15000; // Discord giới hạn tần suất cập nhật trạng thái
+const RPC_POLL_MS = 8000;  // chu kỳ kiểm tra gta_sa.exe còn chạy không
+const appStart = Math.floor(Date.now() / 1000);
+let rpcMode = 'idle', playStart = 0, rpcLast = '', rpcLastAt = 0, rpcTimer = 0, rpcPoll = 0;
+
+// Trạng thái hiển thị: trong launcher hoặc đang chơi (kèm tên server, nhân vật, số người, thời gian, nút forum)
+function buildActivity() {
+  const sv = cur(), st = lastStatus, a = { buttons: [] };
+  if (sv) {
+    const f = sv.forums[0];
+    if (f) a.buttons.push({ label: f.name || hostOf(f.url), url: f.url });
+    if (st) { a.partyCurrent = st.players; a.partyMax = st.maxPlayers; a.partyId = `aether:${srvKey(sv)}`; }
+    a.smallText = srvKey(sv);
+  }
+  if (rpcMode === 'playing' && sv) {
+    a.details = `Đang chơi ${(st && st.hostname) || label(sv)}`;
+    a.state = `Nhân vật: ${normName(cfg.playerName)}`;
+    a.startTimestamp = playStart;
+  } else {
+    a.details = 'Đang ở launcher';
+    a.state = sv ? `Server: ${label(sv)}` : 'AetherLaunch';
+    a.startTimestamp = appStart;
+  }
+  return a;
+}
+// Chỉ gửi khi nội dung đổi, tối thiểu 15 giây giữa hai lần (lần đổi sớm hơn sẽ được hẹn gửi sau)
+function rpcPush(force = false) {
+  if (!cfg.discordRpc) return;
+  const a = buildActivity(), key = JSON.stringify(a);
+  if (key === rpcLast && !force) return;
+  clearTimeout(rpcTimer);
+  const wait = rpcLastAt + RPC_MIN_GAP - Date.now();
+  if (force || wait <= 0) rpcSend(a, key);
+  else rpcTimer = setTimeout(() => rpcPush(), wait + 50);
+}
+async function rpcSend(a, key) {
+  rpcLast = key; rpcLastAt = Date.now();
+  try { await invoke('discord_set_activity', { activity: a }); } catch { rpcLast = ''; } // lỗi (Discord chưa chạy...) -> lần sau thử lại
+}
+// Sau khi bấm Chơi: theo dõi gta_sa.exe; thoát game (2 lần kiểm tra liên tiếp không thấy) thì về trạng thái "trong launcher"
+function watchGame() {
+  clearInterval(rpcPoll); let misses = 0;
+  rpcPoll = setInterval(async () => {
+    let on = true;
+    try { on = await invoke('game_running'); } catch { on = true; }
+    misses = on ? 0 : misses + 1;
+    if (misses >= 2) { clearInterval(rpcPoll); rpcMode = 'idle'; rpcPush(true); }
+  }, RPC_POLL_MS);
+}
+function rpcStartPlaying() {
+  rpcMode = 'playing'; playStart = Math.floor(Date.now() / 1000);
+  if (!cfg.discordRpc) return;
+  rpcPush(true); watchGame();
+}
+function rpcApplySetting() {
+  clearTimeout(rpcTimer);
+  if (!cfg.discordRpc) { clearInterval(rpcPoll); rpcLast = ''; invoke('discord_clear').catch(() => {}); return; }
+  if (rpcMode === 'playing') watchGame();
+  rpcPush(true);
+}
+async function rpcHint() {
+  const h = $('#rpcHint'); h.classList.remove('bad');
+  if (!$('#setRpc').checked) { h.textContent = 'Đang tắt – Discord sẽ không hiện bạn đang dùng AetherLaunch.'; return; }
+  try {
+    const i = await invoke('discord_info', { connect: true });
+    if (!i.configured) { h.textContent = i.error || 'Chưa cấu hình DISCORD_CLIENT_ID (xem README)'; h.classList.add('bad'); }
+    else if (i.connected && !i.error) h.textContent = 'Đã kết nối Discord';
+    else { h.textContent = i.error || 'Chưa kết nối Discord'; h.classList.add('bad'); }
+  } catch { h.textContent = ''; }
+}
+$('#setRpc').onchange = rpcHint;
 
 // =====================================================================
 // SETTINGS (chỉ còn đường dẫn game + tên nhân vật)
 // =====================================================================
-function fillSettings() { $('#setPath').value = cfg.gtaPath; $('#setName').value = cfg.playerName; updateNameHint(); checkGame(); }
+function fillSettings() {
+  $('#setPath').value = cfg.gtaPath; $('#setName').value = cfg.playerName; $('#setRpc').checked = !!cfg.discordRpc;
+  updateNameHint(); checkGame(); rpcHint();
+}
 function updateNameHint() { $('#nameHint').classList.toggle('bad', !validName(normName($('#setName').value))); }
 async function checkGame() {
   const p = $('#setPath').value.trim(), box = $('#gameCheck'); box.innerHTML = '';
@@ -429,8 +627,8 @@ $('#gameModal').onmousedown = e => { if (e.target.id === 'gameModal') skipGame()
 $('#btnSave').onclick = () => {
   const name = normName($('#setName').value);
   if (!validName(name)) return toast('Tên người chơi phải có dấu gạch dưới (_), VD: Max_Bennett', 'err');
-  cfg.gtaPath = $('#setPath').value.trim(); cfg.playerName = name;
-  save(); toast('Đã lưu cài đặt'); go('play');
+  cfg.gtaPath = $('#setPath').value.trim(); cfg.playerName = name; cfg.discordRpc = $('#setRpc').checked;
+  save(); rpcApplySetting(); toast('Đã lưu cài đặt'); go('play');
 };
 
 // ---------- Khởi động ----------

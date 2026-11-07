@@ -32,6 +32,21 @@ fn game_dir(exe_path: &str) -> Option<PathBuf> {
     }
 }
 
+/// gta_sa.exe có đang chạy không (Windows: dùng `tasklist`, không cần thêm thư viện).
+#[cfg(windows)]
+pub fn game_running() -> bool {
+    Command::new("tasklist")
+        .args(["/FI", "IMAGENAME eq gta_sa.exe", "/NH", "/FO", "CSV"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_ascii_lowercase().contains("gta_sa.exe"))
+        .unwrap_or(false)
+}
+#[cfg(not(windows))]
+pub fn game_running() -> bool {
+    false
+}
+
 pub fn check(exe_path: &str) -> GameCheck {
     match game_dir(exe_path) {
         Some(d) => GameCheck {

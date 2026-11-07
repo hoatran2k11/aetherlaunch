@@ -267,3 +267,47 @@ select.field { appearance: none; -webkit-appearance: none; padding-right: 42px; 
 .fld .badges { margin-top: 12px; min-height: 26px; }
 
 .fld + .fld { margin-top: 18px; }
+
+/* Logo sidebar: ảnh đã bo góc sẵn nên khung KHÔNG bo / cắt / đổ nền nữa, ảnh giữ nguyên vị trí và kích thước 42px.
+   Chỉ khi ảnh lỗi (chữ AL dự phòng) mới dùng lại nền gradient bo góc. */
+.logo-mark { overflow: visible; border-radius: 0; background: none; box-shadow: none; }
+.logo-mark img { border-radius: 0; object-fit: contain; }
+.logo-mark.fb { overflow: hidden; border-radius: 14px; background: linear-gradient(135deg, var(--acc), var(--acc2));
+  box-shadow: 0 6px 20px rgba(255,77,141,.45), inset 0 1px 0 rgba(255,255,255,.5); }
+
+/* ---------- Forum ---------- */
+.block { padding: 20px 22px; flex: none; }
+.block-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.items { display: flex; flex-direction: column; gap: 8px; }
+.item { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; background: rgba(0,0,0,.24);
+  border: 1px solid rgba(255,255,255,.1); transition: border-color .2s, background .2s; }
+.item:hover { border-color: rgba(255,255,255,.28); background: rgba(0,0,0,.32); }
+.item.sug { border-style: dashed; }
+.it-main { flex: 1; min-width: 0; }
+.it-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.it-sub { font-size: 12px; color: var(--mut); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.it-btns { display: flex; gap: 8px; flex: none; }
+.item .btn { height: 38px; } .item .btn.sq { width: 38px; padding: 0; }
+.items .empty { padding: 18px 10px; }
+.fsel { width: 240px; max-width: 40%; }
+.forum-quick { display: flex; gap: 8px; flex-wrap: wrap; }
+.forum-quick .btn { height: 46px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Toast có nút hành động (Hoàn tác) */
+.toast { display: flex; align-items: center; gap: 14px; }
+.toast-act { flex: none; border: 0; background: rgba(255,255,255,.14); color: var(--txt); font: inherit; font-weight: 600;
+  padding: 5px 12px; border-radius: 10px; cursor: pointer; transition: background .15s; }
+.toast-act:hover { background: rgba(255,255,255,.26); }
+
+/* ---------- Công tắc (Discord Rich Presence) ---------- */
+.switch-row { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-top: 24px; padding: 14px 16px;
+  border-radius: 14px; background: rgba(0,0,0,.24); border: 1px solid rgba(255,255,255,.1); }
+.switch-row .hint { margin-top: 4px; }
+.sw-title { font-weight: 600; }
+.switch { position: relative; width: 46px; height: 26px; flex: none; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; inset: 0; border-radius: 999px; background: rgba(255,255,255,.22); cursor: pointer; transition: background .2s; }
+.slider::before { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .2s var(--ease); }
+.switch input:checked + .slider { background: linear-gradient(135deg, var(--acc), var(--acc2)); }
+.switch input:checked + .slider::before { transform: translateX(20px); }
+.switch input:focus-visible + .slider { box-shadow: 0 0 0 3px rgba(255,77,141,.3); }

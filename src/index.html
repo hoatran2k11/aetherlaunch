@@ -29,6 +29,7 @@
       <nav class="nav">
         <button data-tab="play" class="active"><span class="ic" data-i="play"></span>Chơi ngay</button>
         <button data-tab="servers"><span class="ic" data-i="dns"></span>Danh sách server</button>
+        <button data-tab="forum"><span class="ic" data-i="forum"></span>Forum</button>
         <button data-tab="settings"><span class="ic" data-i="settings"></span>Cài đặt</button>
         <button data-tab="about"><span class="ic" data-i="info"></span>Thông tin</button>
       </nav>
@@ -75,6 +76,7 @@
           <div class="actions">
             <button id="btnPlay" class="btn-play"><span class="ic" data-i="play"></span><span class="t">CHƠI NGAY</span><span class="spinner"></span></button>
             <button id="btnRefresh" class="btn-icon" title="Làm mới"><span class="ic" data-i="refresh"></span></button>
+            <div id="playForums" class="forum-quick"></div>
           </div>
         </div>
 
@@ -101,6 +103,26 @@
         <div id="serverList" class="server-list"></div>
       </section>
 
+      <!-- ========== FORUM ========== -->
+      <section id="tab-forum" class="view">
+        <div class="glass srv-head">
+          <div>
+            <h2>Forum</h2>
+            <p class="muted small">Link forum được lưu riêng cho từng server.</p>
+          </div>
+          <select id="fSrv" class="field slim fsel" title="Server đang chỉnh"></select>
+        </div>
+
+        <div class="glass block">
+          <div class="block-head">
+            <h2><span class="ic" data-i="forum"></span>Link forum</h2>
+            <button id="btnAddLink" class="btn"><span class="ic" data-i="add"></span>Thêm link</button>
+          </div>
+          <div id="fLinks" class="items"></div>
+        </div>
+
+      </section>
+
       <!-- ========== SETTINGS ========== -->
       <section id="tab-settings" class="view">
         <div class="glass pad form">
@@ -117,6 +139,14 @@
           <input id="setName" class="field" placeholder="Max_Bennett" />
           <div id="nameHint" class="hint">Bắt buộc có dấu gạch dưới (_), dài 3–20 ký tự. VD: Max_Bennett</div>
 
+          <div class="switch-row">
+            <div>
+              <div class="sw-title">Discord Rich Presence</div>
+              <div id="rpcHint" class="hint"></div>
+            </div>
+            <label class="switch" title="Bật / tắt Discord Rich Presence"><input type="checkbox" id="setRpc" /><span class="slider"></span></label>
+          </div>
+
           <div class="form-actions"><button id="btnSave" class="btn primary">Lưu cài đặt</button></div>
         </div>
       </section>
@@ -129,7 +159,7 @@
           <div class="handle">aoh20119</div>
           <p class="muted">Nhà phát triển AetherLaunch</p>
           <div class="chips center">
-            <span class="chip">Tauri v2</span><span class="chip">Rust</span><span class="chip">C++ x86 helper</span><span class="chip">v0.5.9</span>
+            <span class="chip">Tauri v2</span><span class="chip">Rust</span><span class="chip">C++ x86 helper</span><span class="chip">v0.6.0</span>
           </div>
         </div>
       </section>
@@ -184,6 +214,21 @@
     <div class="modal-actions">
       <button id="gmSkip" class="btn">Để sau</button>
       <button id="gmOk" class="btn primary" disabled>Xác nhận</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal thêm / sửa link forum -->
+<div id="linkModal" class="modal-back" aria-hidden="true">
+  <div class="glass modal" role="dialog" aria-modal="true" aria-labelledby="lTitle">
+    <h2 id="lTitle">Thêm link forum</h2>
+    <div class="fgrid">
+      <div class="fld full"><label for="lName">Tên hiển thị (tuỳ chọn)</label><input id="lName" class="field" placeholder="VD: Diễn đàn, Tuyển dụng" /></div>
+      <div class="fld full"><label for="lUrl">Link</label><input id="lUrl" class="field" spellcheck="false" placeholder="https://forum.example.com" /></div>
+    </div>
+    <div class="modal-actions">
+      <button id="lCancel" class="btn">Huỷ</button>
+      <button id="lSave" class="btn primary">Lưu</button>
     </div>
   </div>
 </div>
