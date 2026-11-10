@@ -23,7 +23,6 @@ pub struct RpcConfig {
     pub large_image: String,
     pub small_image: String,
     pub large_text: String,
-    pub extra_button: Option<(String, String)>,
 }
 
 /// Giá trị được nhúng lúc build (build.rs đọc `.env`). Dùng khi lúc chạy không có biến môi trường tương ứng.
@@ -33,8 +32,6 @@ fn builtin(key: &str) -> Option<&'static str> {
         "DISCORD_LARGE_IMAGE" => option_env!("DISCORD_LARGE_IMAGE"),
         "DISCORD_SMALL_IMAGE" => option_env!("DISCORD_SMALL_IMAGE"),
         "DISCORD_LARGE_TEXT" => option_env!("DISCORD_LARGE_TEXT"),
-        "DISCORD_BUTTON_LABEL" => option_env!("DISCORD_BUTTON_LABEL"),
-        "DISCORD_BUTTON_URL" => option_env!("DISCORD_BUTTON_URL"),
         _ => None,
     }
 }
@@ -52,20 +49,12 @@ impl RpcConfig {
         if !(17..=20).contains(&client_id.len()) || !client_id.chars().all(|c| c.is_ascii_digit()) {
             return Err("DISCORD_CLIENT_ID không hợp lệ – phải là dãy 17–20 chữ số (Application ID trong Developer Portal)".into());
         }
-        let extra_button = match (val("DISCORD_BUTTON_LABEL"), val("DISCORD_BUTTON_URL")) {
-            (Some(l), Some(u)) => match (clip_bytes(&l, 32, 1), forum::validate_url(&u)) {
-                (Some(l), Ok(u)) if u.len() <= 512 => Some((l, u)),
-                _ => None,
-            },
-            _ => None,
-        };
         Ok(RpcConfig {
             client_id,
             large_image: val("DISCORD_LARGE_IMAGE").unwrap_or_else(|| "aether_logo".into()),
             small_image: val("DISCORD_SMALL_IMAGE").unwrap_or_else(|| "gta_sa".into()),
             large_text: val("DISCORD_LARGE_TEXT")
                 .unwrap_or_else(|| format!("AetherLaunch v{}", env!("CARGO_PKG_VERSION"))),
-            extra_button,
         })
     }
 }
@@ -122,7 +111,7 @@ struct Prepared {
     buttons: Vec<(String, String)>,
 }
 
-fn prepare(p: &ActivityPayload, cfg: &RpcConfig) -> Prepared {
+fn prepare(p: &ActivityPayload) -> Prepared {
     // Discord: details/state dài 2–128; nút tối đa 2 (label ≤ 32, url ≤ 512, http/https)
     let mut buttons: Vec<(String, String)> = p
         .buttons
@@ -133,9 +122,6 @@ fn prepare(p: &ActivityPayload, cfg: &RpcConfig) -> Prepared {
             Some((label, url))
         })
         .collect();
-    if let Some(extra) = &cfg.extra_button {
-        buttons.push(extra.clone());
-    }
     buttons.truncate(2);
 
     let party = match (p.party_current, p.party_max) {
@@ -199,6 +185,8 @@ pub struct RpcInfo {
     pub configured: bool,
     pub connected: bool,
     pub error: Option<String>,
+    /// Nhãn các nút launcher THỰC SỰ đã gửi cho Discord ở lần cập nhật gần nhất
+    pub sent_buttons: Vec<String>,
 }
 
 enum Msg {
@@ -217,7 +205,7 @@ impl Rpc {
         match cfg {
             Err(e) => Rpc {
                 tx: None,
-                shared: Arc::new(Mutex::new(RpcInfo { configured: false, connected: false, error: Some(e) })),
+                shared: Arc::new(Mutex::new(RpcInfo { configured: false, connected: false, error: Some(e), sent_buttons: vec![] })),
             },
             Ok(cfg) => {
                 let shared = Arc::new(Mutex::new(RpcInfo { configured: true, ..Default::default() }));
@@ -300,9 +288,11 @@ fn apply(cfg: &RpcConfig, client: &mut Option<DiscordIpcClient>, shared: &Arc<Mu
             return;
         }
         let c = client.as_mut().expect("vừa kết nối");
+        let mut labels: Vec<String> = vec![];
         let sent = match act {
             Some(p) => {
-                let pr = prepare(p, cfg);
+                let pr = prepare(p);
+                labels = pr.buttons.iter().map(|(l, _)| l.clone()).collect();
                 c.set_activity(build(&pr, cfg))
             }
             None => c.clear_activity(),
@@ -317,6 +307,7 @@ fn apply(cfg: &RpcConfig, client: &mut Option<DiscordIpcClient>, shared: &Arc<Mu
                 update(shared, |i| {
                     i.connected = true;
                     i.error = err;
+                    i.sent_buttons = labels;
                 });
                 return;
             }
@@ -384,18 +375,32 @@ mod tests {
         assert!(cfg_with(&[("DISCORD_CLIENT_ID", "12345")]).is_err());
         let c = cfg_with(&[("DISCORD_CLIENT_ID", ID)]).unwrap();
         assert_eq!((c.large_image.as_str(), c.small_image.as_str()), ("aether_logo", "gta_sa"));
-        assert!(c.large_text.starts_with("AetherLaunch v") && c.extra_button.is_none());
+        assert!(c.large_text.starts_with("AetherLaunch v"));
     }
 
     #[test]
-    fn config_extra_button_needs_both_and_valid_url() {
-        let ok = cfg_with(&[("DISCORD_CLIENT_ID", ID), ("DISCORD_BUTTON_LABEL", "Tải launcher"), ("DISCORD_BUTTON_URL", "https://x.y/dl")]).unwrap();
-        assert_eq!(ok.extra_button, Some(("Tải launcher".into(), "https://x.y/dl".into())));
-        for bad in [("DISCORD_BUTTON_URL", "javascript:alert(1)"), ("DISCORD_BUTTON_URL", "x.y")] {
-            let c = cfg_with(&[("DISCORD_CLIENT_ID", ID), ("DISCORD_BUTTON_LABEL", "L"), bad]).unwrap();
-            assert!(c.extra_button.is_none());
-        }
-        assert!(cfg_with(&[("DISCORD_CLIENT_ID", ID), ("DISCORD_BUTTON_LABEL", "L")]).unwrap().extra_button.is_none());
+    fn buttons_are_validated_and_capped_at_two() {
+        let btn = |l: &str, u: &str| ButtonPayload { label: l.into(), url: u.into() };
+        let p = ActivityPayload {
+            buttons: vec![
+                btn("Created by Max Bennett", "https://guns.lol/aoh20119"),
+                btn("Xấu", "javascript:alert(1)"),
+                btn("", "https://empty-label.example"),
+                btn("Thứ hai", "https://b.example/"),
+                btn("Thứ ba", "https://c.example/"),
+            ],
+            ..Default::default()
+        };
+        let pr = prepare(&p);
+        // link xấu và nhãn rỗng bị loại; tối đa 2 nút
+        assert_eq!(pr.buttons.len(), 2);
+        assert_eq!(pr.buttons[0], ("Created by Max Bennett".to_string(), "https://guns.lol/aoh20119".to_string()));
+        assert_eq!(pr.buttons[1].0, "Thứ hai");
+        // không có nút nào được tự thêm từ cấu hình
+        assert!(prepare(&ActivityPayload::default()).buttons.is_empty());
+        // nhãn dài bị cắt theo byte (≤ 32)
+        let long = prepare(&ActivityPayload { buttons: vec![btn(&"Đ".repeat(40), "https://a.b")], ..Default::default() });
+        assert!(long.buttons[0].0.len() <= 32);
     }
 
     #[test]
@@ -410,7 +415,6 @@ mod tests {
 
     #[test]
     fn prepare_applies_discord_limits() {
-        let cfg = cfg_with(&[("DISCORD_CLIENT_ID", ID), ("DISCORD_BUTTON_LABEL", "Tải"), ("DISCORD_BUTTON_URL", "https://dl.example/x")]).unwrap();
         let p = ActivityPayload {
             details: "a".into(), // quá ngắn -> bỏ
             state: "Nhân vật: Max_Bennett".into(),
@@ -424,17 +428,18 @@ mod tests {
             ],
             ..Default::default()
         };
-        let pr = prepare(&p, &cfg);
+        let pr = prepare(&p);
         assert_eq!(pr.details, None);
         assert_eq!(pr.state.as_deref(), Some("Nhân vật: Max_Bennett"));
         assert_eq!(pr.party, None);
-        // link xấu bị loại; tối đa 2 nút kể cả nút cố định từ .env (đặt cuối, phần dư bị cắt)
+        // link xấu bị loại; tối đa 2 nút (phần dư bị cắt)
         assert_eq!(pr.buttons.len(), 2);
         assert_eq!(pr.buttons[0].0, "Forum");
+        assert_eq!(pr.buttons[1].0, "Thứ ba");
         let p2 = ActivityPayload { party_current: Some(63), party_max: Some(300), party_id: Some("aether:h:7777".into()), ..Default::default() };
-        assert_eq!(prepare(&p2, &cfg).party, Some(([63, 300], "aether:h:7777".into())));
+        assert_eq!(prepare(&p2).party, Some(([63, 300], "aether:h:7777".into())));
         let p3 = ActivityPayload { party_current: Some(301), party_max: Some(300), ..Default::default() };
-        assert_eq!(prepare(&p3, &cfg).party, None);
+        assert_eq!(prepare(&p3).party, None);
     }
 
     #[test]
@@ -527,7 +532,7 @@ mod tests {
             std::env::set_var("XDG_RUNTIME_DIR", &dir);
 
             // 0) Discord chưa chạy
-            let cfg = cfg_with(&[("DISCORD_CLIENT_ID", ID), ("DISCORD_BUTTON_LABEL", "Tải launcher"), ("DISCORD_BUTTON_URL", "https://dl.example/aether")]).unwrap();
+            let cfg = cfg_with(&[("DISCORD_CLIENT_ID", ID)]).unwrap();
             let rpc = Rpc::new(Ok(cfg));
             let i = rpc.info(true);
             assert!(i.configured && !i.connected && i.error.as_deref().unwrap().contains("Chưa thấy Discord"), "{i:?}");
@@ -543,7 +548,7 @@ mod tests {
                 party_id: Some("aether:sv.gtaviet.net:7777".into()),
                 small_text: Some("sv.gtaviet.net:7777".into()),
                 buttons: vec![
-                    ButtonPayload { label: "Forum".into(), url: "https://forum.gtaviet.net/".into() },
+                    ButtonPayload { label: "Created by Max Bennett".into(), url: "https://guns.lol/aoh20119".into() },
                     ButtonPayload { label: "Xấu".into(), url: "javascript:alert(1)".into() },
                 ],
             };
@@ -561,8 +566,10 @@ mod tests {
             assert_eq!(a["assets"]["small_image"], "gta_sa");
             assert_eq!(a["assets"]["small_text"], "sv.gtaviet.net:7777");
             assert!(a["assets"]["large_text"].as_str().unwrap().starts_with("AetherLaunch v"));
-            assert_eq!(a["buttons"], json!([{"label":"Forum","url":"https://forum.gtaviet.net/"},{"label":"Tải launcher","url":"https://dl.example/aether"}]));
+            assert_eq!(a["buttons"], json!([{"label":"Created by Max Bennett","url":"https://guns.lol/aoh20119"}]));
             assert!(wait_for(|| rpc.info(false).connected));
+            // launcher báo lại đúng những nút đã gửi cho Discord
+            assert!(wait_for(|| rpc.info(false).sent_buttons == ["Created by Max Bennett"]), "{:?}", rpc.info(false));
 
             // 2) Gộp lệnh dồn dập: bản cuối cùng luôn tới nơi
             for n in 1..=5 {

@@ -1,13 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod discord;
+mod envfile;
 mod forum;
 mod launch;
 mod query;
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
-/// Query thông tin server (info + rules + ping + người chơi) qua UDP.
 #[tauri::command]
 async fn query_server(
     host: String,
@@ -21,7 +21,6 @@ async fn query_server(
     .map_err(|e| e.to_string())?
 }
 
-/// Danh sách người chơi (opcode 'd', dự phòng 'c'). Gọi riêng để không chặn thẻ trạng thái.
 #[tauri::command]
 async fn query_players(
     host: String,
@@ -35,13 +34,11 @@ async fn query_players(
     .map_err(|e| e.to_string())?
 }
 
-/// Kiểm tra gta_sa.exe và samp.dll cho trang Cài đặt.
 #[tauri::command]
 fn check_game(exe_path: String) -> launch::GameCheck {
     launch::check(&exe_path)
 }
 
-/// Gọi helper x86 để chạy game + inject samp.dll.
 #[tauri::command]
 async fn launch_game(
     app: tauri::AppHandle,
@@ -58,19 +55,16 @@ async fn launch_game(
     .map_err(|e| e.to_string())?
 }
 
-/// Đặt trạng thái Discord Rich Presence (trả về ngay; việc gửi chạy ở luồng riêng).
 #[tauri::command]
 fn discord_set_activity(rpc: tauri::State<'_, discord::Rpc>, activity: discord::ActivityPayload) -> Result<(), String> {
     rpc.set(activity)
 }
 
-/// Xoá trạng thái Discord đang hiển thị.
 #[tauri::command]
 fn discord_clear(rpc: tauri::State<'_, discord::Rpc>) -> Result<(), String> {
     rpc.clear()
 }
 
-/// Tình trạng cấu hình / kết nối Discord (connect = true: thử kết nối ngay).
 #[tauri::command]
 async fn discord_info(app: tauri::AppHandle, connect: bool) -> discord::RpcInfo {
     tauri::async_runtime::spawn_blocking(move || app.state::<discord::Rpc>().info(connect))
@@ -78,14 +72,11 @@ async fn discord_info(app: tauri::AppHandle, connect: bool) -> discord::RpcInfo 
         .unwrap_or_default()
 }
 
-/// gta_sa.exe có đang chạy không (để biết khi nào đổi trạng thái Discord về "trong launcher").
 #[tauri::command]
 async fn game_running() -> bool {
     tauri::async_runtime::spawn_blocking(launch::game_running).await.unwrap_or(false)
 }
 
-/// Mở link forum trong cửa sổ trình duyệt tích hợp (một cửa sổ dùng chung, tái sử dụng khi mở link khác).
-/// Cửa sổ này tải trang ngoài nên KHÔNG nằm trong capabilities: trang forum không có quyền gọi API của Tauri.
 #[tauri::command]
 async fn open_forum(app: tauri::AppHandle, url: String, title: Option<String>) -> Result<(), String> {
     let url = forum::validate_url(&url)?;
@@ -119,9 +110,11 @@ async fn open_forum(app: tauri::AppHandle, url: String, title: Option<String>) -
 /// Biến môi trường thật luôn được ưu tiên; không có thì dùng giá trị đã nhúng lúc build.
 fn load_dotenv() {
     if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.to_path_buf())) {
-        let _ = dotenvy::from_path(dir.join(".env"));
+        envfile::load_into_env(&dir.join(".env"));
     }
-    let _ = dotenvy::dotenv();
+    if let Some(p) = std::env::current_dir().ok().and_then(|d| envfile::find_up(&d)) {
+        envfile::load_into_env(&p);
+    }
 }
 
 fn main() {
@@ -129,7 +122,6 @@ fn main() {
     tauri::Builder::default()
         .manage(discord::Rpc::new(discord::RpcConfig::load()))
         .plugin(tauri_plugin_dialog::init())
-        // Đóng cửa sổ chính thì thoát hẳn app (kể cả cửa sổ forum đang mở)
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 if window.label() == "main" {

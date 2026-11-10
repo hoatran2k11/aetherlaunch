@@ -7,11 +7,12 @@ thêm tính năng thì tăng số giữa (`0.6.0` → `0.7.0`), sửa lỗi nh�
 ## [0.6.0] - 2026-11-07
 
 ### Thêm
-- **Discord Rich Presence**: hiển thị trên Discord đang ở launcher hay đang chơi, tên server, tên nhân vật, số người chơi (x of y), thời gian, địa chỉ server và nút mở forum.
+- **Discord Rich Presence**: hiển thị trên Discord đang ở launcher hay đang chơi, tên server, tên nhân vật, số người chơi (x of y), thời gian, địa chỉ server và nút tác giả.
   - Tự về trạng thái "Đang ở launcher" khi thoát game (dò `gta_sa.exe` mỗi 8 giây, hai lần liên tiếp không thấy).
   - Công tắc bật/tắt trong **Cài đặt**, kèm dòng báo trạng thái kết nối (đã kết nối / chưa thấy Discord / thiếu cấu hình).
-  - Cấu hình bằng `.env` (`DISCORD_CLIENT_ID`, tên ảnh lớn/nhỏ, chữ rê chuột, một nút cố định); giá trị được nhúng vào bản build, có thể ghi đè bằng `.env` cạnh file `.exe` hoặc biến môi trường.
-  - Chỉ gửi khi nội dung đổi và cách nhau tối thiểu 15 giây (giới hạn của Discord); tự kết nối lại khi Discord khởi động lại; hiện rõ lý do khi Discord từ chối trạng thái.
+  - Cấu hình bằng `.env` (`DISCORD_CLIENT_ID`, tên ảnh lớn/nhỏ, chữ rê chuột); giá trị được nhúng vào bản build, có thể ghi đè bằng `.env` cạnh file `.exe` hoặc biến môi trường.
+  - Bộ đọc `.env` tự viết, dễ tính: giá trị có dấu cách không cần dấu nháy (VD: `DISCORD_LARGE_TEXT=AetherLaunch của tôi`), chấp nhận chú thích, `export`, CRLF và cả file lưu UTF-16 (PowerShell).
+  - Thẻ Discord có một nút cố định **Created by Max Bennett** (nhãn và link nằm trong code, hằng số `AUTHOR_BUTTON` ở `src/app.js`). Dòng trạng thái ở **Cài đặt** cho biết launcher thực sự gửi những nút nào (VD: *Đang gửi 1 nút: “Created by Max Bennett”*). Discord không hiện nút trên thẻ của chính bạn nên dòng này giúp kiểm tra mà không cần tài khoản phụ.
   - Thêm `.env.example` và hướng dẫn tạo ứng dụng trên Discord Developer Portal trong README.
 - **Tab Forum**: lưu link forum riêng cho từng server, mở trong cửa sổ trình duyệt tích hợp của launcher (đăng nhập được giữ lại).
   - Tối đa 3 link đầu của server đang chọn hiện thành nút mở nhanh trên trang **Chơi ngay**.
@@ -25,7 +26,7 @@ thêm tính năng thì tăng số giữa (`0.6.0` → `0.7.0`), sửa lỗi nh�
 - Logo ở sidebar hiển thị đúng ảnh gốc: khung không còn bo góc, cắt hay đổ nền chồng lên ảnh đã bo sẵn (khi ảnh lỗi vẫn có chữ AL dự phòng với khung gradient).
 - Mỗi server lưu thêm danh sách link forum; sửa server không làm mất link forum.
 - Đóng cửa sổ chính thì thoát hẳn ứng dụng, kể cả cửa sổ forum đang mở.
-- Yêu cầu Rust từ 1.90 trở lên để tự build (Tauri 2.12); thêm thư viện `discord-rich-presence` và `dotenvy`.
+- Yêu cầu Rust từ 1.90 trở lên để tự build (Tauri 2.12); thêm thư viện `discord-rich-presence`.
 
 ### Bảo mật
 - Cửa sổ forum chỉ mở link `http://` và `https://`; từ chối `javascript:`, `file:`, dạng `user@host`, khoảng trắng và link quá dài. Cửa sổ này không nằm trong capabilities nên trang forum không gọi được API của Tauri.

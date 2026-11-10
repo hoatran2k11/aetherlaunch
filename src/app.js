@@ -488,15 +488,15 @@ $('#fLinks').onclick = e => {
 // =====================================================================
 const RPC_MIN_GAP = 15000; // Discord giới hạn tần suất cập nhật trạng thái
 const RPC_POLL_MS = 8000;  // chu kỳ kiểm tra gta_sa.exe còn chạy không
+// Nút duy nhất trên thẻ Discord: cứng trong code (đổi nhãn/link tại đây)
+const AUTHOR_BUTTON = { label: 'Created by Max Bennett', url: 'https://guns.lol/aoh20119' };
 const appStart = Math.floor(Date.now() / 1000);
 let rpcMode = 'idle', playStart = 0, rpcLast = '', rpcLastAt = 0, rpcTimer = 0, rpcPoll = 0;
 
-// Trạng thái hiển thị: trong launcher hoặc đang chơi (kèm tên server, nhân vật, số người, thời gian, nút forum)
+// Trạng thái hiển thị: trong launcher hoặc đang chơi (kèm tên server, nhân vật, số người, thời gian, nút tác giả)
 function buildActivity() {
-  const sv = cur(), st = lastStatus, a = { buttons: [] };
+  const sv = cur(), st = lastStatus, a = { buttons: [AUTHOR_BUTTON] };
   if (sv) {
-    const f = sv.forums[0];
-    if (f) a.buttons.push({ label: f.name || hostOf(f.url), url: f.url });
     if (st) { a.partyCurrent = st.players; a.partyMax = st.maxPlayers; a.partyId = `aether:${srvKey(sv)}`; }
     a.smallText = srvKey(sv);
   }
@@ -551,9 +551,11 @@ async function rpcHint() {
   if (!$('#setRpc').checked) { h.textContent = 'Đang tắt – Discord sẽ không hiện bạn đang dùng AetherLaunch.'; return; }
   try {
     const i = await invoke('discord_info', { connect: true });
+    const sent = i.sentButtons || [];
+    const btn = sent.length ? ` · Đang gửi ${sent.length} nút: ${sent.map(b => `“${b}”`).join(', ')}` : '';
     if (!i.configured) { h.textContent = i.error || 'Chưa cấu hình DISCORD_CLIENT_ID (xem README)'; h.classList.add('bad'); }
-    else if (i.connected && !i.error) h.textContent = 'Đã kết nối Discord';
-    else { h.textContent = i.error || 'Chưa kết nối Discord'; h.classList.add('bad'); }
+    else if (i.connected && !i.error) h.textContent = 'Đã kết nối Discord' + btn;
+    else { h.textContent = (i.error || 'Chưa kết nối Discord') + btn; h.classList.add('bad'); }
   } catch { h.textContent = ''; }
 }
 $('#setRpc').onchange = rpcHint;

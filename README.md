@@ -48,7 +48,7 @@ Helper PHẢI là 32-bit vì gta_sa.exe là 32-bit.
 
 ## Discord Rich Presence
 
-Hiển thị trên Discord của bạn: đang ở launcher hay đang chơi, tên server, tên nhân vật, số người chơi (x of y), thời gian đã chơi, địa chỉ server, nút mở forum.
+Hiển thị trên Discord của bạn: đang ở launcher hay đang chơi, tên server, tên nhân vật, số người chơi (x of y), thời gian đã chơi, địa chỉ server và nút tác giả.
 
 ### 1. Tạo ứng dụng trên Discord Developer Portal
 1. Vào https://discord.com/developers/applications và đăng nhập, bấm **New Application**.
@@ -64,7 +64,8 @@ Hiển thị trên Discord của bạn: đang ở launcher hay đang chơi, tên
 ```
 copy .env.example .env      (Windows)   hoặc   cp .env.example .env
 ```
-Mở `.env`, dán Application ID vào `DISCORD_CLIENT_ID=`; các biến còn lại xem chú thích trong file.
+Mở `.env`, dán Application ID vào `DISCORD_CLIENT_ID=`; các biến còn lại (tên ảnh, chữ rê chuột) xem chú thích trong file.
+- Giá trị có dấu cách **không cần dấu nháy** (VD: `DISCORD_LARGE_TEXT=AetherLaunch của tôi`). Dòng bắt đầu bằng `#` là chú thích.
 - Chạy `npm run tauri dev`: app đọc `.env` mỗi lần khởi động (đổi `.env` thì mở lại app).
 - Chạy `npm run tauri build`: giá trị `DISCORD_*` được nhúng vào file .exe, người dùng không cần file `.env`. Đổi `.env` thì build lại.
 - Muốn ghi đè khi chạy: đặt file `.env` cạnh file .exe hoặc đặt biến môi trường thật (được ưu tiên hơn giá trị nhúng).
@@ -72,13 +73,15 @@ Mở `.env`, dán Application ID vào `DISCORD_CLIENT_ID=`; các biến còn l�
 ### 3. Kiểm tra
 1. Mở **ứng dụng Discord trên máy tính** (bản web/điện thoại không dùng được) và bật *User Settings → Activity Privacy → Share my activity / Display current activity as a status message*.
 2. Mở AetherLaunch → **Cài đặt**: dòng dưới công tắc *Discord Rich Presence* phải báo **Đã kết nối Discord**.
-3. Nút của chính bạn thường không hiện trên thẻ của bạn; hãy nhờ bạn bè hoặc tài khoản phụ xem.
+3. Thẻ Discord có đúng **1 nút cố định**: *Created by Max Bennett* (nhãn và link nằm cứng trong `src/app.js`, hằng số `AUTHOR_BUTTON`; sửa ở đó nếu muốn đổi). Dòng trạng thái ở Cài đặt ghi *Đang gửi 1 nút: …*, đó là nút launcher thật sự gửi cho Discord.
+   **Lưu ý:** Discord không hiện nút trên thẻ của chính bạn, chỉ người khác thấy. Hãy nhờ bạn bè hoặc dùng tài khoản phụ để xem, hoặc dựa vào dòng *Đang gửi 1 nút* để biết launcher đã gửi chưa.
 
 ### Xử lý sự cố
 | Hiện tượng | Cách xử lý |
 |---|---|
 | Hint báo *Chưa cấu hình / không hợp lệ DISCORD_CLIENT_ID* | Kiểm tra `.env` (17–20 chữ số, không để chữ `your_application_id`), mở lại app |
 | *Chưa thấy Discord đang chạy* | Mở Discord desktop. Nếu launcher chạy bằng *Run as administrator* thì Discord cũng cần cùng quyền (hai bên khác quyền thường không kết nối được) |
+| Không thấy nút trên thẻ | Nếu bạn đang nhìn thẻ của chính mình thì đây là bình thường (Discord không hiện nút cho chủ thẻ), hãy nhờ người khác xem. Nếu vẫn không thấy, xem dòng *Đang gửi 1 nút* ở Cài đặt: không thấy dòng đó nghĩa là đang chạy bản cũ (thay file mới rồi mở lại / build lại app) |
 | Có trạng thái nhưng không có ảnh | Sai tên key ảnh, hoặc ảnh mới tải còn đang xử lý; kiểm tra tên trong Art Assets khớp `DISCORD_LARGE_IMAGE` / `DISCORD_SMALL_IMAGE` |
 | Hint báo *Discord từ chối trạng thái: …* | Đọc nội dung lỗi (thường do link nút sai); trạng thái được gửi lại ở lần cập nhật sau |
 | Không muốn hiện | Tắt công tắc *Discord Rich Presence* ở Cài đặt rồi Lưu: trạng thái bị xoá ngay |
