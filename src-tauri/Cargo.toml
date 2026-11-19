@@ -1,6 +1,6 @@
 [package]
 name = "aetherlaunch"
-version = "0.6.0"
+version = "0.8.0"
 edition = "2021"
 
 [build-dependencies]
@@ -13,6 +13,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 encoding_rs = "0.8"
 discord-rich-presence = "1"
+# Tải dữ liệu game (src/data.rs). default-tls = SChannel trên Windows, không cần OpenSSL / NASM.
+reqwest = { version = "0.12", default-features = false, features = ["default-tls"] }
+tokio = { version = "1", features = ["rt", "time", "macros"] }
+sha2 = "0.10"
 
 [profile.release]
 opt-level = "s"

@@ -1,12 +1,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod data;
 mod discord;
 mod envfile;
 mod forum;
 mod launch;
 mod query;
 
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 #[tauri::command]
 async fn query_server(
@@ -53,6 +57,62 @@ async fn launch_game(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+// ---------- Tải dữ liệu game (xem src/data.rs) ----------
+
+/// Thư mục cài mặc định gợi ý cho người dùng: %LOCALAPPDATA%\AetherLaunch\GTA San Andreas
+#[tauri::command]
+fn data_default_dir(app: tauri::AppHandle) -> String {
+    let base: PathBuf = app
+        .path()
+        .local_data_dir()
+        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    base.join("AetherLaunch").join("GTA San Andreas").to_string_lossy().into_owned()
+}
+
+/// Tìm gta_sa.exe trong thư mục người dùng chọn (không phân biệt hoa/thường). None nếu không có.
+#[tauri::command]
+fn find_game_exe(dir: String) -> Option<String> {
+    data::find_game_exe(Path::new(dir.trim())).map(|p| p.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+async fn data_manifest(url: String) -> Result<data::ManifestInfo, String> {
+    data::manifest_info(&url).await
+}
+
+/// Đặt lại cờ `running` kể cả khi tác vụ bị huỷ / panic.
+struct RunGuard(Arc<data::Control>);
+impl Drop for RunGuard {
+    fn drop(&mut self) {
+        self.0.running.store(false, Ordering::SeqCst);
+    }
+}
+
+#[tauri::command]
+async fn data_install(
+    app: tauri::AppHandle,
+    ctl: tauri::State<'_, Arc<data::Control>>,
+    url: String,
+    dir: String,
+) -> Result<data::InstallResult, String> {
+    let ctl: Arc<data::Control> = ctl.inner().clone();
+    if ctl.running.swap(true, Ordering::SeqCst) {
+        return Err("Đang có một tiến trình tải dữ liệu khác".into());
+    }
+    let _guard = RunGuard(ctl.clone());
+    ctl.cancel.store(false, Ordering::SeqCst);
+    let ev = app.clone();
+    data::install(&url, Path::new(dir.trim()), ctl, &mut move |p| {
+        let _ = ev.emit("data-progress", p);
+    })
+    .await
+}
+
+#[tauri::command]
+fn data_cancel(ctl: tauri::State<'_, Arc<data::Control>>) {
+    ctl.cancel.store(true, Ordering::SeqCst);
 }
 
 #[tauri::command]
@@ -121,6 +181,7 @@ fn main() {
     load_dotenv();
     tauri::Builder::default()
         .manage(discord::Rpc::new(discord::RpcConfig::load()))
+        .manage(Arc::new(data::Control::default()))
         .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
@@ -138,7 +199,12 @@ fn main() {
             discord_set_activity,
             discord_clear,
             discord_info,
-            game_running
+            game_running,
+            data_default_dir,
+            find_game_exe,
+            data_manifest,
+            data_install,
+            data_cancel
         ])
         .run(tauri::generate_context!())
         .expect("Lỗi khi chạy ứng dụng Tauri");

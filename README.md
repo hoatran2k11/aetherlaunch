@@ -7,6 +7,8 @@ Anime + Material + Liquid Glass launcher cho SA-MP. Tác giả: Max Bennett (aoh
 aetherlaunch/
 ├─ package.json            # chỉ cần @tauri-apps/cli
 ├─ app-icon.png            # icon nguồn -> chạy `npm run tauri icon app-icon.png`
+├─ tools/make-manifest.mjs  # tạo manifest.json cho server tải dữ liệu game
+├─ server/                 # Caddy + docker-compose dựng server dữ liệu (xem DEPLOY-DATA-SERVER.md)
 ├─ helper/
 │  ├─ samp_helper.cpp      # helper x86: chạy gta_sa.exe suspended + inject samp.dll (theo sampcmd)
 │  └─ build_helper.bat     # build bằng MSVC x86
@@ -20,6 +22,7 @@ aetherlaunch/
    └─ src/
       ├─ main.rs           # đăng ký command: query_server, check_game, launch_game
       ├─ query.rs          # SA-MP UDP query (i/r/d/p) + unit test
+      ├─ data.rs           # tải / cập nhật dữ liệu game từ server (manifest + SHA-256 + resume)
       └─ launch.rs         # kiểm tra input, gọi helper, dịch mã lỗi
 ```
 
@@ -40,6 +43,10 @@ Helper PHẢI là 32-bit vì gta_sa.exe là 32-bit.
 - Tên người chơi BẮT BUỘC có dấu gạch dưới (vd `Max_Bennett`); dấu cách tự đổi thành `_`.
 - Server > 100 người không trả danh sách người chơi (giới hạn của SA-MP).
 - Nếu gta_sa.exe cần quyền Administrator, hãy chạy launcher bằng Run as administrator.
+
+## Tải dữ liệu game (lần đầu)
+Lần đầu mở app hiện hộp thoại: **Đã có game trên máy** (chọn thư mục game) hoặc **Tải dữ liệu game** (tải từ server của bạn).
+Để bật tải dữ liệu: dựng server theo [DEPLOY-DATA-SERVER.md](DEPLOY-DATA-SERVER.md), rồi đặt `DATA_MANIFEST_URL` trong `src/app.js`.
 
 ## Forum
 - Tab **Forum**: mỗi server có danh sách link forum riêng (thêm / sửa / xoá, xoá có nút Hoàn tác).

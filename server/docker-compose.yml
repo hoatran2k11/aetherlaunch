@@ -1,0 +1,17 @@
+# Chạy:  docker compose up -d
+# Đặt dữ liệu vào ./data :   ./data/manifest.json   ./data/v1.0.0/gta_sa.exe ...
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data:/srv/data:ro
+      - caddy_data:/data          # giữ chứng chỉ HTTPS giữa các lần khởi động lại
+      - caddy_logs:/var/log/caddy
+volumes:
+  caddy_data:
+  caddy_logs:

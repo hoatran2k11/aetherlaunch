@@ -4,6 +4,23 @@ Tất cả thay đổi đáng chú ý của **AetherLaunch** được ghi lại 
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/), đánh số phiên bản theo [SemVer](https://semver.org/lang/vi/):
 thêm tính năng thì tăng số giữa (`0.6.0` → `0.7.0`), sửa lỗi nhỏ thì tăng số cuối (`0.6.0` → `0.6.1`).
 
+## [0.7.0] - 2026-11-19
+
+### Thêm
+- **Tải dữ liệu game từ server**: hộp thoại thiết lập lần đầu giờ có hai lựa chọn: **Đã có game trên máy** (chọn thư mục game, launcher tự tìm `gta_sa.exe`) hoặc **Tải dữ liệu game** (chọn thư mục cài, tải toàn bộ bộ dữ liệu của server).
+  - Dựa trên `manifest.json` (danh sách file + SHA-256 + dung lượng); tạo bằng `tools/make-manifest.mjs`.
+  - Hiện thanh tiến độ, tốc độ, thời gian còn lại; có nút **Huỷ tải**.
+  - Tải tiếp khi đứt mạng (HTTP Range) và tự thử lại; chạy lại để cập nhật hoặc sửa file hỏng (file đúng được bỏ qua, file thừa của người chơi không bị xoá).
+  - An toàn: chỉ nhận https (http chỉ cho localhost), chặn path traversal, kiểm tra SHA-256 từng file, không theo chuyển hướng sang http.
+  - Khi server có phiên bản dữ liệu mới, launcher báo **"Có bản cập nhật dữ liệu game"**.
+  - Nút **Tải / cập nhật dữ liệu game…** trong **Cài đặt**.
+- `DEPLOY-DATA-SERVER.md` và thư mục `server/` (Caddy + Docker Compose) hướng dẫn dựng server dữ liệu.
+- Ô đường dẫn game (hộp thoại lần đầu và Cài đặt) nhận cả thư mục game lẫn đường dẫn `gta_sa.exe`.
+
+### Thay đổi
+- Bấm **Chơi ngay** khi chưa thiết lập game sẽ mở hộp thoại thiết lập thay vì chuyển sang Cài đặt.
+- Thêm thư viện `reqwest`, `tokio`, `sha2` (Rust).
+
 ## [0.6.0] - 2026-11-07
 
 ### Thêm

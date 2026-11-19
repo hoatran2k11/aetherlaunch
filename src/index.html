@@ -134,6 +134,7 @@
             <button id="btnBrowse" class="btn"><span class="ic" data-i="folder"></span>Chọn…</button>
           </div>
           <div id="gameCheck" class="badges"></div>
+          <div class="row"><button id="btnData" class="btn" type="button"><span class="ic" data-i="refresh"></span>Tải / cập nhật dữ liệu game…</button></div>
 
           <label class="lbl">Tên nhân vật</label>
           <input id="setName" class="field" placeholder="Max_Bennett" />
@@ -159,7 +160,7 @@
           <div class="handle">aoh20119</div>
           <p class="muted">Nhà phát triển AetherLaunch</p>
           <div class="chips center">
-            <span class="chip">Tauri v2</span><span class="chip">Rust</span><span class="chip">C++ x86 helper</span><span class="chip">v0.6.0</span>
+            <span class="chip">Tauri v2</span><span class="chip">Rust</span><span class="chip">C++ x86 helper</span><span class="chip">v0.8.0</span>
           </div>
         </div>
       </section>
@@ -195,18 +196,45 @@
 
 <!-- Modal hỏi vị trí gta_sa.exe (hiện khi mở app lần đầu) -->
 <div id="gameModal" class="modal-back" aria-hidden="true">
-  <div class="glass modal" role="dialog" aria-modal="true" aria-labelledby="gmTitle">
+  <div class="glass modal wide" role="dialog" aria-modal="true" aria-labelledby="gmTitle">
     <h2 id="gmTitle">Chào mừng đến với AetherLaunch</h2>
-    <p class="lead">Hãy chọn file <b>gta_sa.exe</b> trong thư mục GTA San Andreas (đã cài SA-MP hoặc open.mp) và đặt tên nhân vật để bắt đầu chơi.</p>
-    <div class="fld">
-      <label for="gmPath">Đường dẫn gta_sa.exe</label>
+    <p class="lead">Cần có dữ liệu <b>GTA San Andreas</b> (đã cài SA-MP hoặc open.mp) để chơi. Bạn đã có game trên máy, hay muốn tải dữ liệu từ server?</p>
+
+    <div class="seg" role="tablist" aria-label="Cách thiết lập game">
+      <button type="button" class="seg-btn on" id="gmTabExisting" data-mode="existing" role="tab" aria-selected="true">Đã có game trên máy</button>
+      <button type="button" class="seg-btn" id="gmTabDownload" data-mode="download" role="tab" aria-selected="false">Tải dữ liệu game</button>
+    </div>
+
+    <div id="gmPaneExisting" class="fld">
+      <label for="gmPath">Thư mục game (hoặc đường dẫn gta_sa.exe)</label>
       <div class="row">
-        <input id="gmPath" class="field grow" placeholder="D:\GTA San Andreas\gta_sa.exe" spellcheck="false" />
-        <button id="gmBrowse" class="btn"><span class="ic" data-i="folder"></span>Chọn…</button>
+        <input id="gmPath" class="field grow" placeholder="D:\GTA San Andreas" spellcheck="false" />
+        <button id="gmBrowse" class="btn"><span class="ic" data-i="folder"></span>Chọn thư mục…</button>
       </div>
       <div id="gmCheck" class="badges"></div>
     </div>
-    <div class="fld">
+
+    <div id="gmPaneDownload" hidden>
+      <div class="fld">
+        <label for="gmDir">Cài vào thư mục</label>
+        <div class="row">
+          <input id="gmDir" class="field grow" spellcheck="false" />
+          <button id="gmDirBrowse" class="btn"><span class="ic" data-i="folder"></span>Đổi…</button>
+        </div>
+        <div id="gmPack" class="hint">Đang lấy thông tin bộ dữ liệu…</div>
+      </div>
+      <div id="gmDl" class="dl" hidden>
+        <div class="dl-top"><span id="gmDlFile" class="dl-file"></span><b id="gmDlPct">0%</b></div>
+        <div class="bar big"><i id="gmDlBar"></i></div>
+        <div class="dl-sub"><span id="gmDlBytes"></span><span id="gmDlSpeed"></span></div>
+      </div>
+      <div class="dl-actions">
+        <button id="gmDlStart" class="btn primary" disabled>Tải xuống</button>
+        <button id="gmDlCancel" class="btn" hidden>Huỷ tải</button>
+      </div>
+    </div>
+
+    <div class="fld gm-name">
       <label for="gmName">Tên nhân vật</label>
       <input id="gmName" class="field" placeholder="Max_Bennett" autocomplete="off" />
       <div id="gmNameHint" class="hint">Bắt buộc có dấu gạch dưới (_), dài 3–20 ký tự. VD: Max_Bennett</div>

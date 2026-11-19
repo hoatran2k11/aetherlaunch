@@ -50,10 +50,13 @@ imgFallback('logoImg', 'logoTxt'); imgFallback('avatarImg', 'avatarTxt');
 
 // ---------- Cấu hình (localStorage) ----------
 // Server giờ là danh sách riêng: { name, host, port, password, encoding }, chọn bằng cfg.selected.
+// Link manifest.json của server dữ liệu game (xem DEPLOY-DATA-SERVER.md). Để nguyên giá trị mẫu = tắt tính năng tải dữ liệu.
+const DATA_MANIFEST_URL = 'https://data.example.com/aetherlaunch/manifest.json';
+const DATA_CONFIGURED = !/(^|\.)example\.com(\/|$)/i.test(DATA_MANIFEST_URL.replace(/^https?:\/\//i, ''));
 const KEY = 'samp-launcher.v1';
 const ENC = 'windows-1252';
 const DEFAULTS = {
-  gtaPath: '', askedGame: false, playerName: 'Max_Bennett', selected: 0, discordRpc: true,
+  gtaPath: '', askedGame: false, dataDir: '', dataVersion: '', playerName: 'Max_Bennett', selected: 0, discordRpc: true,
   servers: [{ name: 'GTA Viet Nam', host: 'sv.gtaviet.net', port: 7777, password: '', encoding: ENC, forums: [] }],
 };
 const cleanLinks = a => (Array.isArray(a) ? a : []).filter(l => l && typeof l.url === 'string' && l.url).map(l => ({ name: String(l.name || '').slice(0, 60), url: l.url }));
@@ -261,7 +264,7 @@ setInterval(() => { if (tab === 'play' && !document.hidden && cur()) refreshStat
 $('#btnPlay').onclick = async () => {
   const sv = cur();
   if (!sv) { toast('Chưa có server – hãy thêm ở tab Danh sách server', 'err'); return go('servers'); }
-  if (!cfg.gtaPath) { toast('Chưa chọn gta_sa.exe – mở Cài đặt', 'err'); return go('settings'); }
+  if (!cfg.gtaPath) { toast('Chưa thiết lập game – hãy chọn thư mục game có sẵn hoặc tải dữ liệu', 'err'); return openGameModal(); }
   if (lastStatus && lastStatus.password && !sv.password) {
     toast('Server này cần mật khẩu – bấm Sửa trong Danh sách server để nhập', 'err'); return go('servers');
   }
@@ -569,7 +572,7 @@ function fillSettings() {
 }
 function updateNameHint() { $('#nameHint').classList.toggle('bad', !validName(normName($('#setName').value))); }
 async function checkGame() {
-  const p = $('#setPath').value.trim(), box = $('#gameCheck'); box.innerHTML = '';
+  const p = await resolveExe($('#setPath').value), box = $('#gameCheck'); box.innerHTML = '';
   if (!p) return;
   try {
     const r = await invoke('check_game', { exePath: p });
@@ -585,51 +588,162 @@ async function pickGameExe() {
 $('#btnBrowse').onclick = async () => { const f = await pickGameExe(); if (f) { $('#setPath').value = f; checkGame(); } };
 
 // =====================================================================
-// MODAL HỎI VỊ TRÍ GTA_SA.EXE (lần đầu mở app)
+// MODAL THIẾT LẬP GAME (lần đầu): chọn thư mục game có sẵn HOẶC tải dữ liệu từ server
 // =====================================================================
-let gmReq = 0;
+let gmReq = 0, gmExeOk = false, gmExePath = '', gmMode = 'existing', dlBusy = false, packInfo = null;
+const fmtBytes = n => {
+  if (!(n >= 0)) return '—';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return `${n.toFixed(i >= 2 ? 1 : 0)} ${u[i]}`;
+};
+const fmtEta = sec => sec >= 3600 ? `${Math.floor(sec / 3600)} giờ ${Math.round(sec % 3600 / 60)} phút` : sec >= 60 ? `${Math.round(sec / 60)} phút` : `${Math.max(1, Math.round(sec))} giây`;
+
+// Nhận cả thư mục game lẫn đường dẫn gta_sa.exe; trả '' nếu không tìm thấy gta_sa.exe
+async function resolveExe(p) {
+  p = (p || '').trim().replace(/^"(.*)"$/, '$1');
+  if (!p) return '';
+  if (/\.exe$/i.test(p)) return p;
+  try { return (await invoke('find_game_exe', { dir: p })) || ''; } catch { return ''; }
+}
 function gameBadges(r) {
   return `<span class="badge ${r.exe ? 'ok' : 'no'}">${r.exe ? '✓' : '✕'} gta_sa.exe</span><span class="badge ${r.sampDll ? 'ok' : 'no'}">${r.sampDll ? '✓' : '✕'} samp.dll</span>`;
 }
-let gmExeOk = false;
-// Nút Xong chỉ bật khi file gta_sa.exe hợp lệ VÀ tên nhân vật hợp lệ
+// Nút Xác nhận chỉ bật khi tìm thấy gta_sa.exe VÀ tên nhân vật hợp lệ (và không đang tải)
 function gmUpdate() {
   const nameOk = validName(normName($('#gmName').value));
   $('#gmNameHint').classList.toggle('bad', !nameOk);
-  $('#gmOk').disabled = !(gmExeOk && nameOk);
+  $('#gmOk').disabled = dlBusy || !(gmExeOk && nameOk);
 }
 async function gmCheck() {
   const p = $('#gmPath').value.trim(), my = ++gmReq;
-  gmExeOk = false; gmUpdate();
+  gmExeOk = false; gmExePath = ''; gmUpdate();
   if (!p) { $('#gmCheck').innerHTML = ''; return; }
   try {
-    const r = await invoke('check_game', { exePath: p });
+    const exe = await resolveExe(p);
+    if (my !== gmReq) return;
+    if (!exe) { $('#gmCheck').innerHTML = '<span class="badge no">✕ Không thấy gta_sa.exe</span><span class="hint">Hãy chọn đúng thư mục chứa gta_sa.exe, hoặc chuyển sang “Tải dữ liệu game”.</span>'; return; }
+    const r = await invoke('check_game', { exePath: exe });
     if (my !== gmReq) return;
     $('#gmCheck').innerHTML = gameBadges(r) + (r.exe && !r.sampDll ? '<span class="hint">Thiếu samp.dll – hãy cài SA-MP/open.mp client vào thư mục game.</span>' : '');
-    gmExeOk = !!r.exe; gmUpdate();
+    gmExeOk = !!r.exe; gmExePath = r.exe ? exe : ''; gmUpdate();
   } catch { if (my === gmReq) $('#gmCheck').innerHTML = ''; }
 }
-function openGameModal() {
+
+function gmSetMode(m) {
+  if (dlBusy) return;
+  gmMode = m;
+  $('#gmTabExisting').classList.toggle('on', m === 'existing'); $('#gmTabExisting').setAttribute('aria-selected', String(m === 'existing'));
+  $('#gmTabDownload').classList.toggle('on', m === 'download'); $('#gmTabDownload').setAttribute('aria-selected', String(m === 'download'));
+  $('#gmPaneExisting').hidden = m !== 'existing'; $('#gmPaneDownload').hidden = m !== 'download';
+  if (m === 'download') gmLoadPack();
+}
+async function gmLoadPack() {
+  const box = $('#gmPack'), btn = $('#gmDlStart');
+  box.classList.remove('bad'); btn.textContent = 'Tải xuống';
+  if (!DATA_CONFIGURED) {
+    packInfo = null; btn.disabled = true; box.classList.add('bad');
+    box.textContent = 'Launcher chưa cấu hình server dữ liệu (DATA_MANIFEST_URL trong src/app.js). Hãy chọn “Đã có game trên máy”.';
+    return;
+  }
+  if (!$('#gmDir').value.trim()) {
+    try { $('#gmDir').value = cfg.dataDir || await invoke('data_default_dir'); } catch { /* chạy ngoài Tauri */ }
+  }
+  packInfo = null; btn.disabled = true; box.textContent = 'Đang lấy thông tin bộ dữ liệu…';
+  try {
+    const i = await invoke('data_manifest', { url: DATA_MANIFEST_URL });
+    packInfo = i; btn.disabled = false;
+    box.textContent = `${i.name} · v${i.version} · ${i.fileCount} file · ${fmtBytes(i.totalBytes)} (cần chừa đủ dung lượng trống). Chạy lại để cập nhật hoặc sửa file hỏng.`;
+  } catch (e) {
+    box.classList.add('bad'); box.textContent = String(e); btn.disabled = false; btn.textContent = 'Thử lại';
+  }
+}
+function setDlUi(busy) {
+  dlBusy = busy;
+  $('#gmDl').hidden = !busy && $('#gmDlBar').style.width === '';
+  $('#gmDlStart').hidden = busy; $('#gmDlCancel').hidden = !busy; $('#gmDlCancel').disabled = false;
+  ['#gmDir', '#gmDirBrowse', '#gmTabExisting', '#gmTabDownload', '#gmSkip', '#gmName'].forEach(id => $(id).disabled = busy);
+  gmUpdate();
+}
+function paintProgress(p) {
+  const pct = p.total ? Math.min(100, Math.floor(p.done / p.total * 100)) : 0;
+  $('#gmDl').hidden = false;
+  $('#gmDlBar').style.width = pct + '%'; $('#gmDlPct').textContent = pct + '%';
+  $('#gmDlFile').textContent = p.phase === 'checking' ? `Đang kiểm tra ${p.file}…` : p.phase === 'done' ? 'Hoàn tất' : `Đang tải ${p.file} (${p.fileIndex}/${p.fileCount})`;
+  $('#gmDlBytes').textContent = `${fmtBytes(p.done)} / ${fmtBytes(p.total)}`;
+  $('#gmDlSpeed').textContent = p.phase === 'downloading' && p.speed > 0 ? `${fmtBytes(p.speed)}/s · còn ${fmtEta((p.total - p.done) / p.speed)}` : '';
+}
+async function gmStartDownload() {
+  if (dlBusy) return;
+  if (!packInfo) return gmLoadPack();
+  const dir = $('#gmDir').value.trim();
+  if (!dir) return toast('Hãy chọn thư mục cài đặt', 'err');
+  $('#gmDlBar').style.width = '0%'; $('#gmDlPct').textContent = '0%'; $('#gmDlFile').textContent = 'Đang chuẩn bị…'; $('#gmDlBytes').textContent = ''; $('#gmDlSpeed').textContent = '';
+  setDlUi(true);
+  let unlisten = null;
+  try {
+    unlisten = await T.event.listen('data-progress', e => paintProgress(e.payload));
+    const r = await invoke('data_install', { url: DATA_MANIFEST_URL, dir });
+    cfg.dataDir = r.dir; cfg.dataVersion = r.version; save();
+    if (!r.exe) toast('Đã tải xong nhưng bộ dữ liệu không có gta_sa.exe – hãy báo cho chủ server', 'err', { ms: 15000 });
+    else {
+      toast(`Đã tải xong: ${r.downloaded} file mới, ${r.skipped} file đã đúng sẵn`);
+      $('#gmPath').value = r.exe; setDlUi(false); gmSetMode('existing'); gmCheck();
+    }
+  } catch (e) {
+    const m = String(e);
+    if (m === 'CANCELLED') toast('Đã huỷ tải. Lần sau sẽ tiếp tục từ chỗ đang dở.', 'ok', { ms: 4000 });
+    else toast(m, 'err', { ms: 15000 });
+  } finally { if (unlisten) unlisten(); setDlUi(false); }
+}
+
+function openGameModal(mode = 'existing') {
+  $('#gmTitle').textContent = cfg.askedGame ? 'Thiết lập dữ liệu game' : 'Chào mừng đến với AetherLaunch';
   $('#gmPath').value = cfg.gtaPath || ''; $('#gmName').value = cfg.playerName; $('#gmCheck').innerHTML = '';
-  gmExeOk = false; gmUpdate(); showBack($('#gameModal')); gmCheck();
+  $('#gmDir').value = cfg.dataDir || ''; $('#gmDl').hidden = true; $('#gmDlBar').style.width = '';
+  gmExeOk = false; gmExePath = ''; dlBusy = false; setDlUi(false); gmSetMode(mode);
+  showBack($('#gameModal')); gmCheck();
 }
 function finishGameModal() { cfg.askedGame = true; save(); hideBack($('#gameModal')); }
-function skipGame() { finishGameModal(); toast('Bạn có thể chọn gta_sa.exe và đổi tên nhân vật sau trong Cài đặt'); }
+function skipGame() {
+  if (dlBusy) return toast('Đang tải dữ liệu – hãy bấm “Huỷ tải” nếu muốn dừng', 'err', { ms: 4000 });
+  finishGameModal(); toast('Bạn có thể thiết lập game và đổi tên nhân vật sau trong Cài đặt');
+}
 function confirmGame() {
-  if ($('#gmOk').disabled) return;
-  cfg.gtaPath = $('#gmPath').value.trim(); cfg.playerName = normName($('#gmName').value);
+  if ($('#gmOk').disabled || dlBusy) return;
+  cfg.gtaPath = gmExePath || $('#gmPath').value.trim(); cfg.playerName = normName($('#gmName').value);
   finishGameModal(); toast('Đã lưu. Bạn có thể đổi tên nhân vật trong Cài đặt bất cứ lúc nào.');
 }
-$('#gmBrowse').onclick = async () => { const f = await pickGameExe(); if (f) { $('#gmPath').value = f; gmCheck(); } };
+async function pickFolder(title) {
+  try { return await T.dialog.open({ directory: true, multiple: false, title }); }
+  catch (e) { toast(String(e), 'err'); return null; }
+}
+$('#gmBrowse').onclick = async () => { const f = await pickFolder('Chọn thư mục GTA San Andreas (có gta_sa.exe)'); if (f) { $('#gmPath').value = f; gmCheck(); } };
+$('#gmDirBrowse').onclick = async () => { const f = await pickFolder('Chọn thư mục để cài dữ liệu game'); if (f) $('#gmDir').value = f; };
+$('#gmTabExisting').onclick = () => gmSetMode('existing');
+$('#gmTabDownload').onclick = () => gmSetMode('download');
+$('#gmDlStart').onclick = gmStartDownload;
+$('#gmDlCancel').onclick = () => { $('#gmDlCancel').disabled = true; invoke('data_cancel').catch(() => {}); };
 $('#gmPath').oninput = gmCheck;
 $('#gmName').oninput = gmUpdate;
 $('#gmSkip').onclick = skipGame;
 $('#gmOk').onclick = confirmGame;
 $('#gameModal').onmousedown = e => { if (e.target.id === 'gameModal') skipGame(); };
-$('#btnSave').onclick = () => {
+$('#btnData').onclick = () => openGameModal('download');
+
+// Có bản dữ liệu mới trên server không? (chỉ khi đã từng tải bằng launcher)
+async function checkDataUpdate() {
+  if (!DATA_CONFIGURED || !cfg.dataDir) return;
+  try {
+    const i = await invoke('data_manifest', { url: DATA_MANIFEST_URL });
+    if (i.version !== cfg.dataVersion)
+      toast(`Có bản cập nhật dữ liệu game v${i.version}`, 'ok', { ms: 20000, action: { label: 'Cập nhật', fn: () => openGameModal('download') } });
+  } catch { /* offline: bỏ qua */ }
+}
+$('#btnSave').onclick = async () => {
   const name = normName($('#setName').value);
   if (!validName(name)) return toast('Tên người chơi phải có dấu gạch dưới (_), VD: Max_Bennett', 'err');
-  cfg.gtaPath = $('#setPath').value.trim(); cfg.playerName = name; cfg.discordRpc = $('#setRpc').checked;
+  cfg.gtaPath = (await resolveExe($('#setPath').value)) || $('#setPath').value.trim(); cfg.playerName = name; cfg.discordRpc = $('#setRpc').checked;
   save(); rpcApplySetting(); toast('Đã lưu cài đặt'); go('play');
 };
 
@@ -637,4 +751,5 @@ $('#btnSave').onclick = () => {
 renderServerSelect(); buildServerList(); renderPlayers();
 refreshStatus();
 if (!cfg.gtaPath && !cfg.askedGame) setTimeout(openGameModal, 350); // lần đầu mở app
+else setTimeout(checkDataUpdate, 2500);
 })();
