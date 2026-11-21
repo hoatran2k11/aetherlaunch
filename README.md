@@ -22,8 +22,10 @@ aetherlaunch/
    └─ src/
       ├─ main.rs           # đăng ký command: query_server, check_game, launch_game
       ├─ query.rs          # SA-MP UDP query (i/r/d/p) + unit test
+      ├─ geo.rs            # quốc gia + cờ của máy chủ (ipinfo, FlagCDN / FlagsAPI)
       ├─ data.rs           # tải / cập nhật dữ liệu game từ server (manifest + SHA-256 + resume)
-      └─ launch.rs         # kiểm tra input, gọi helper, dịch mã lỗi
+      ├─ saves.rs          # slot save, sao lưu / khôi phục, nhập / xuất (+ unit test)
+      └─ launch.rs         # kiểm tra input, gọi helper (online) hoặc gta_sa.exe (offline), dịch mã lỗi
 ```
 
 ## Chạy
@@ -47,6 +49,22 @@ Helper PHẢI là 32-bit vì gta_sa.exe là 32-bit.
 ## Tải dữ liệu game (lần đầu)
 Lần đầu mở app hiện hộp thoại: **Đã có game trên máy** (chọn thư mục game) hoặc **Tải dữ liệu game** (tải từ server của bạn).
 Để bật tải dữ liệu: dựng server theo [DEPLOY-DATA-SERVER.md](DEPLOY-DATA-SERVER.md), rồi đặt `DATA_MANIFEST_URL` trong `src/app.js`.
+
+## Chơi offline và quản lý save
+Tab **Chơi offline** chạy `gta_sa.exe` trực tiếp (chế độ cốt truyện, không nạp `samp.dll`).
+- Save nằm ở `Documents\GTA San Andreas User Files` (đổi được trong tab nếu bạn đặt chỗ khác). Mỗi slot là một file `GTASAsfN.b`, đúng 202 752 byte.
+- Launcher chỉ làm việc với 8 tên file cố định đó; nhập file từ ngoài phải qua kiểm tra (kích thước, chữ ký `BLOCK`, checksum) mới được ghi.
+- Trước khi ghi đè / xoá / khôi phục luôn có bản sao lưu *an toàn* để hoàn tác. Không thao tác được khi game đang chạy.
+- Bản sao lưu: `%LOCALAPPDATA%\AetherLaunch\SaveBackups\<ngày-giờ>-<loại>\` (kèm `meta.json`). Có thể chép đi nơi khác để lưu trữ.
+
+## Quốc gia và cờ của máy chủ
+Mỗi server hiện cờ + tên quốc gia (ở trang Chơi ngay, Danh sách server và danh sách chọn nhanh). Cách làm:
+1. Launcher phân giải tên miền của server ra IP rồi hỏi **ipinfo** (`api.ipinfo.io/lite/<ip>`) để biết quốc gia.
+2. Ảnh cờ tải từ **FlagCDN** (`flagcdn.com/w40/vn.png`), lỗi thì dùng **FlagsAPI** (`flagsapi.com/VN/flat/32.png`).
+3. Kết quả được nhớ 7 ngày (không tra lại mỗi lần mở app). Mất mạng hoặc dịch vụ lỗi thì đơn giản là không hiện cờ.
+
+Cấu hình trong `.env` (xem `.env.example`): `IPINFO_TOKEN` (token Lite miễn phí, nên có) và `FLAG_PROVIDER` (tuỳ chọn).
+Server ở IP nội bộ (192.168.x.x, 127.0.0.1…) không bao giờ bị gửi ra ngoài. Việc gọi mạng chạy ở phần Rust nên CSP của webview không đổi.
 
 ## Forum
 - Tab **Forum**: mỗi server có danh sách link forum riêng (thêm / sửa / xoá, xoá có nút Hoàn tác).

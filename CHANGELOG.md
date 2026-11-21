@@ -4,6 +4,29 @@ Tất cả thay đổi đáng chú ý của **AetherLaunch** được ghi lại 
 Định dạng theo [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/), đánh số phiên bản theo [SemVer](https://semver.org/lang/vi/):
 thêm tính năng thì tăng số giữa (`0.6.0` → `0.7.0`), sửa lỗi nhỏ thì tăng số cuối (`0.6.0` → `0.6.1`).
 
+## [0.9.0] - 2026-11-21
+
+### Thêm
+- **Chơi offline** (tab mới *Chơi offline*, cùng nút tắt ở trang *Chơi ngay*): chạy thẳng `gta_sa.exe` để chơi cốt truyện, không nạp SA-MP, không cần helper x86. Discord Rich Presence hiện "Đang chơi offline".
+- **Quản lý file save** (`GTASAsf1.b` … `GTASAsf8.b`):
+  - Xem 8 slot (tên save nếu đọc được, dung lượng, thời gian sửa) và cảnh báo save hỏng (sai kích thước / chữ ký / checksum).
+  - **Xuất / Nhập** từng slot ra / vào file `.b` (kiểm tra hợp lệ trước khi ghi), **Xoá** slot.
+  - **Sao lưu** thủ công (kèm ghi chú), **tự sao lưu trước khi chơi offline** (bỏ qua nếu save không đổi), **khôi phục** toàn bộ hoặc chọn từng slot, xoá bản sao lưu.
+  - Thư mục save mặc định `Documents\GTA San Andreas User Files`, có thể đổi trong tab. Bản sao lưu nằm ở `%LOCALAPPDATA%\AetherLaunch\SaveBackups`.
+- An toàn: mọi thao tác ghi/xoá/khôi phục đều tự tạo bản sao lưu *an toàn* trước; ghi file theo kiểu tạm + đổi tên (không để lại file dở dang); bị khoá khi GTA:SA đang chạy; bản sao lưu hỏng bị từ chối mà không đụng tới save hiện tại; id sao lưu và tên slot được kiểm tra chặt (không thể thoát khỏi thư mục).
+- Giữ 10 bản tự động/an toàn gần nhất; bản thủ công giữ mãi.
+
+### Lưu ý
+- Tên save hiển thị là phỏng đoán theo cấu trúc file (không có tài liệu chính thức); nếu không đọc được thì để trống, không ảnh hưởng tính đúng đắn của sao lưu/khôi phục.
+
+## [0.8.0] - 2026-11-20
+
+### Thêm
+- **Quốc gia và cờ của máy chủ**: hiện cờ cạnh tên quốc gia (tên theo tiếng Việt) ở trang **Chơi ngay**, **Danh sách server** và danh sách chọn nhanh. Di chuột vào để xem thêm thành phố (nếu có) và IP.
+  - Vị trí lấy từ **ipinfo** (IPinfo Lite khi có `IPINFO_TOKEN`, không có thì endpoint cũ không token); ảnh cờ từ **FlagCDN**, dự phòng **FlagsAPI** (`FLAG_PROVIDER=flagsapi` để đảo thứ tự).
+  - Chạy ở phần Rust, ảnh cờ trả về dạng data URI nên không phải nới CSP. Kết quả nhớ 7 ngày; offline hoặc dịch vụ lỗi thì không hiện cờ (thử lại sau 10 phút), không ảnh hưởng chức năng khác.
+  - Không gửi IP nội bộ ra ngoài; token không lộ trong thông báo lỗi; dữ liệu cache sai khuôn bị bỏ qua.
+
 ## [0.7.0] - 2026-11-19
 
 ### Thêm

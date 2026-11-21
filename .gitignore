@@ -19,6 +19,8 @@ out/
 *.msi
 *.nsis
 *-setup.exe
+pack/
+manifest.json
 
 # ---------- Helper C++ (x86) ----------
 helper/build/

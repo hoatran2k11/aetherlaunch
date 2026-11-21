@@ -3,9 +3,11 @@
 mod data;
 mod discord;
 mod envfile;
+mod geo;
 mod forum;
 mod launch;
 mod query;
+mod saves;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
@@ -110,6 +112,188 @@ async fn data_install(
     .await
 }
 
+/// Quốc gia của máy chủ (ipinfo) + ảnh cờ. Lỗi "PRIVATE" = địa chỉ nội bộ, frontend im lặng bỏ qua.
+#[tauri::command]
+async fn server_geo(host: String) -> Result<geo::Geo, String> {
+    geo::lookup(&host, &geo::Config::load()).await
+}
+
+// ---------- Chơi offline & quản lý file save (xem src/saves.rs) ----------
+
+/// Số bản sao lưu tự động/an toàn được giữ lại (bản thủ công giữ mãi).
+const KEEP_BACKUPS: usize = 10;
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SavesInfo {
+    dir: String,
+    default_dir: String,
+    dir_exists: bool,
+    backup_root: String,
+    game_running: bool,
+    slots: Vec<saves::Slot>,
+    backups: Vec<saves::BackupInfo>,
+}
+
+/// `%USERPROFILE%\Documents\GTA San Andreas User Files`
+fn saves_default_dir(app: &tauri::AppHandle) -> PathBuf {
+    app.path()
+        .document_dir()
+        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default())
+        .join("GTA San Andreas User Files")
+}
+
+fn saves_dir(app: &tauri::AppHandle, custom: &Option<String>) -> PathBuf {
+    match custom.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(c) => PathBuf::from(c),
+        None => saves_default_dir(app),
+    }
+}
+
+fn backup_root(app: &tauri::AppHandle) -> PathBuf {
+    app.path()
+        .local_data_dir()
+        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default())
+        .join("AetherLaunch")
+        .join("SaveBackups")
+}
+
+/// Mọi thao tác ghi/xoá save bị chặn khi game đang chạy (game giữ/ghi đè file save).
+async fn ensure_idle() -> Result<(), String> {
+    if tauri::async_runtime::spawn_blocking(launch::game_running).await.unwrap_or(false) {
+        Err("GTA:SA đang chạy – hãy thoát game rồi thử lại".into())
+    } else {
+        Ok(())
+    }
+}
+
+#[tauri::command]
+async fn saves_info(app: tauri::AppHandle, dir: Option<String>) -> Result<SavesInfo, String> {
+    let d = saves_dir(&app, &dir);
+    let root = backup_root(&app);
+    let default_dir = saves_default_dir(&app).to_string_lossy().into_owned();
+    tauri::async_runtime::spawn_blocking(move || SavesInfo {
+        dir_exists: d.is_dir(),
+        slots: saves::list_slots(&d),
+        backups: saves::list_backups(&root),
+        backup_root: root.to_string_lossy().into_owned(),
+        game_running: launch::game_running(),
+        dir: d.to_string_lossy().into_owned(),
+        default_dir,
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Chơi offline. `auto_backup`: sao lưu save hiện tại trước khi vào game (bỏ qua nếu không đổi).
+#[tauri::command]
+async fn play_offline(
+    app: tauri::AppHandle,
+    exe_path: String,
+    dir: Option<String>,
+    auto_backup: bool,
+) -> Result<String, String> {
+    let d = saves_dir(&app, &dir);
+    let root = backup_root(&app);
+    tauri::async_runtime::spawn_blocking(move || {
+        if auto_backup && d.is_dir() {
+            // Lỗi sao lưu không được chặn việc chơi; chỉ ghi log.
+            if let Err(e) = saves::auto_backup(&d, &root, KEEP_BACKUPS) {
+                eprintln!("auto_backup: {e}");
+            }
+        }
+        launch::run_offline(&exe_path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn saves_backup(app: tauri::AppHandle, dir: Option<String>, label: String) -> Result<saves::BackupInfo, String> {
+    ensure_idle().await?;
+    let (d, root) = (saves_dir(&app, &dir), backup_root(&app));
+    tauri::async_runtime::spawn_blocking(move || saves::manual_backup(&d, &root, &label, KEEP_BACKUPS))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn saves_restore(
+    app: tauri::AppHandle,
+    dir: Option<String>,
+    id: String,
+    only: Option<Vec<u8>>,
+) -> Result<saves::RestoreResult, String> {
+    ensure_idle().await?;
+    let (d, root) = (saves_dir(&app, &dir), backup_root(&app));
+    tauri::async_runtime::spawn_blocking(move || {
+        saves::restore_backup(&d, &root, &id, only.as_deref(), KEEP_BACKUPS)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn saves_delete_backup(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let root = backup_root(&app);
+    tauri::async_runtime::spawn_blocking(move || saves::delete_backup(&root, &id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn saves_delete_slot(app: tauri::AppHandle, dir: Option<String>, slot: u8) -> Result<(), String> {
+    ensure_idle().await?;
+    let (d, root) = (saves_dir(&app, &dir), backup_root(&app));
+    tauri::async_runtime::spawn_blocking(move || saves::delete_slot(&d, &root, slot, KEEP_BACKUPS))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn saves_import(app: tauri::AppHandle, dir: Option<String>, slot: u8, src: String) -> Result<(), String> {
+    ensure_idle().await?;
+    let (d, root) = (saves_dir(&app, &dir), backup_root(&app));
+    tauri::async_runtime::spawn_blocking(move || saves::import_save(&d, &root, slot, Path::new(src.trim()), KEEP_BACKUPS))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn saves_export(app: tauri::AppHandle, dir: Option<String>, slot: u8, dest: String) -> Result<(), String> {
+    let d = saves_dir(&app, &dir);
+    tauri::async_runtime::spawn_blocking(move || saves::export_save(&d, slot, Path::new(dest.trim())))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Mở thư mục save / thư mục sao lưu trong Explorer. Chỉ nhận hai đích cố định, không nhận đường dẫn tuỳ ý.
+#[tauri::command]
+fn saves_open_folder(app: tauri::AppHandle, dir: Option<String>, which: String) -> Result<(), String> {
+    let p = match which.as_str() {
+        "saves" => saves_dir(&app, &dir),
+        "backups" => backup_root(&app),
+        _ => return Err("Đích không hợp lệ".into()),
+    };
+    std::fs::create_dir_all(&p).map_err(|e| format!("Không tạo được thư mục: {e}"))?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("explorer")
+            .arg(&p)
+            .creation_flags(0x0800_0000)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = &p;
+        return Err("Chỉ hỗ trợ Windows".into());
+    }
+    #[allow(unreachable_code)]
+    Ok(())
+}
+
 #[tauri::command]
 fn data_cancel(ctl: tauri::State<'_, Arc<data::Control>>) {
     ctl.cancel.store(true, Ordering::SeqCst);
@@ -204,7 +388,17 @@ fn main() {
             find_game_exe,
             data_manifest,
             data_install,
-            data_cancel
+            data_cancel,
+            server_geo,
+            saves_info,
+            play_offline,
+            saves_backup,
+            saves_restore,
+            saves_delete_backup,
+            saves_delete_slot,
+            saves_import,
+            saves_export,
+            saves_open_folder
         ])
         .run(tauri::generate_context!())
         .expect("Lỗi khi chạy ứng dụng Tauri");

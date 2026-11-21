@@ -120,7 +120,7 @@ fn is_local(u: &Url) -> bool {
     }
 }
 
-fn check_url(u: &Url) -> Result<(), String> {
+pub(crate) fn check_url(u: &Url) -> Result<(), String> {
     match u.scheme() {
         "https" => Ok(()),
         "http" if is_local(u) => Ok(()),
@@ -187,7 +187,7 @@ fn net_err(e: reqwest::Error) -> String {
     }
 }
 
-fn client() -> Result<Client, String> {
+pub(crate) fn client() -> Result<Client, String> {
     Client::builder()
         .user_agent(concat!("AetherLaunch/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(Duration::from_secs(15))

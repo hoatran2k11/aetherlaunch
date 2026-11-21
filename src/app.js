@@ -28,6 +28,10 @@ const ICONS = {
   open: 'M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z',
   expand: 'M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z',
   check: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+  save: 'M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z',
+  history: 'M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z',
+  upload: 'M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z',
+  download: 'M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z',
   person: 'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
 };
 function paintIcons(root = document) {
@@ -56,7 +60,7 @@ const DATA_CONFIGURED = !/(^|\.)example\.com(\/|$)/i.test(DATA_MANIFEST_URL.repl
 const KEY = 'samp-launcher.v1';
 const ENC = 'windows-1252';
 const DEFAULTS = {
-  gtaPath: '', askedGame: false, dataDir: '', dataVersion: '', playerName: 'Max_Bennett', selected: 0, discordRpc: true,
+  gtaPath: '', askedGame: false, dataDir: '', dataVersion: '', playerName: 'Max_Bennett', selected: 0, discordRpc: true, saveDir: '', autoBackup: true,
   servers: [{ name: 'GTA Viet Nam', host: 'sv.gtaviet.net', port: 7777, password: '', encoding: ENC, forums: [] }],
 };
 const cleanLinks = a => (Array.isArray(a) ? a : []).filter(l => l && typeof l.url === 'string' && l.url).map(l => ({ name: String(l.name || '').slice(0, 60), url: l.url }));
@@ -123,9 +127,56 @@ function go(name) {
   if (name === 'servers') queryServers();
   if (name === 'settings') fillSettings();
   if (name === 'forum') renderForum();
+  if (name === 'offline') offRefresh();
 }
 $$('.nav button').forEach(b => b.onclick = () => go(b.dataset.tab));
 $('#btnManage').onclick = () => go('servers');
+$('#btnGoOffline').onclick = () => go('offline');
+
+// =====================================================================
+// VỊ TRÍ MÁY CHỦ: quốc gia + cờ (Rust gọi ipinfo + FlagCDN/FlagsAPI, xem src-tauri/src/geo.rs)
+// =====================================================================
+const GEO_KEY = 'samp-launcher.geo.v1', GEO_TTL = 7 * 24 * 3600 * 1000, GEO_RETRY = 10 * 60 * 1000;
+const hostKey = sv => String(sv.host || '').trim().toLowerCase();
+let geoStore = {};
+try { geoStore = JSON.parse(localStorage.getItem(GEO_KEY) || '{}') || {}; } catch { geoStore = {}; }
+const geoFail = {}, geoBusy = {}; // host -> thời điểm được thử lại (Infinity = IP nội bộ, không bao giờ tra) / đang tra
+// Dữ liệu từ localStorage chỉ được tin khi đúng khuôn: mã nước 2 chữ hoa, ảnh cờ là PNG data URI
+const geoOk = g => g && /^[A-Z]{2}$/.test(g.countryCode) && (!g.flag || /^data:image\/png;base64,[A-Za-z0-9+\/=]+$/.test(g.flag));
+function geoGet(sv) { const e = geoStore[hostKey(sv)]; return e && Date.now() - e.t < GEO_TTL && geoOk(e.g) ? e.g : null; }
+function geoPersist() {
+  const keep = new Set(cfg.servers.map(hostKey));
+  Object.keys(geoStore).forEach(k => { if (!keep.has(k)) delete geoStore[k]; });
+  try { localStorage.setItem(GEO_KEY, JSON.stringify(geoStore)); } catch { /* đầy / bị chặn: bỏ qua, chỉ mất cache */ }
+}
+let regionNames = null;
+try { regionNames = new Intl.DisplayNames(['vi'], { type: 'region' }); } catch { /* WebView cũ */ }
+function countryName(g) {
+  try { const n = regionNames && regionNames.of(g.countryCode); if (n && n !== g.countryCode) return n; } catch { /* mã lạ */ }
+  return g.country || g.countryCode;
+}
+function flagHtml(g) {
+  return g.flag ? `<img class="flag" src="${g.flag}" alt="" width="20" height="15" draggable="false">` : `<span class="flag cc">${esc(g.countryCode)}</span>`;
+}
+function geoHtml(g) {
+  const n = countryName(g), tip = [n, g.city && g.region && g.region !== g.city ? `${g.city}, ${g.region}` : g.city, `IP ${g.ip}`].filter(Boolean).join(' · ');
+  return `<span class="geo" title="${esc(tip)}">${flagHtml(g)}<span class="geo-n">${esc(n)}</span></span>`;
+}
+function paintGeo() {
+  paintAllCards(); renderServerSelect();
+  const sv = cur(), g = sv && geoGet(sv);
+  setHtml($('#srvGeo'), g ? geoHtml(g) : '');
+}
+// Tra một lần cho mỗi host (cache 7 ngày). Lỗi mạng thì thử lại sau 10 phút; IP nội bộ thì bỏ qua hẳn.
+function ensureGeo(sv) {
+  const k = hostKey(sv);
+  if (!k || geoGet(sv) || geoBusy[k] || Date.now() < (geoFail[k] || 0)) return;
+  geoBusy[k] = true;
+  invoke('server_geo', { host: k })
+    .then(g => { if (geoOk(g)) { geoStore[k] = { t: Date.now(), g }; geoPersist(); } else geoFail[k] = Date.now() + GEO_RETRY; })
+    .catch(e => { const m = String(e); geoFail[k] = m === 'PRIVATE' ? Infinity : Date.now() + GEO_RETRY; if (m !== 'PRIVATE') console.warn('[geo]', k, m); })
+    .finally(() => { delete geoBusy[k]; paintGeo(); });
+}
 
 // =====================================================================
 // PLAY
@@ -140,11 +191,14 @@ function renderServerSelect() {
   $('#ddLabel').textContent = sv ? label(sv) : 'Chưa có server';
   btn.title = sv ? `${label(sv)} — ${srvKey(sv)}` : 'Chưa có server';
   btn.disabled = !cfg.servers.length;
-  $('#ddMenu').innerHTML = cfg.servers.map((s, i) =>
-    `<button type="button" class="dd-item${i === cfg.selected ? ' on' : ''}" role="option" aria-selected="${i === cfg.selected}" data-idx="${i}" title="${esc(label(s))} — ${esc(srvKey(s))}">
-       <span class="dd-txt"><b>${esc(label(s))}</b><small>${esc(srvKey(s))}</small></span>
-       <span class="ic dd-check" data-i="check"></span></button>`).join('');
+  $('#ddMenu').innerHTML = cfg.servers.map((s, i) => {
+    const g = geoGet(s);
+    return `<button type="button" class="dd-item${i === cfg.selected ? ' on' : ''}" role="option" aria-selected="${i === cfg.selected}" data-idx="${i}" title="${esc(label(s))} — ${esc(srvKey(s))}${g ? ' — ' + esc(countryName(g)) : ''}">
+       <span class="dd-txt"><b>${esc(label(s))}</b><small>${g ? flagHtml(g) : ''}${esc(srvKey(s))}</small></span>
+       <span class="ic dd-check" data-i="check"></span></button>`; }).join('');
   paintIcons($('#ddMenu'));
+  setHtml($('#srvGeo'), sv && geoGet(sv) ? geoHtml(geoGet(sv)) : '');
+  cfg.servers.forEach(ensureGeo);
   renderPlayForums();
 }
 function toggleDd(open) {
@@ -290,7 +344,7 @@ function srvInner(i, sv) {
     ? `<div class="num"><b>${s.players}/${s.maxPlayers}</b><small>Người chơi</small></div><div class="num"><b class="${pingClass(s.pingMs)}">${Math.round(s.pingMs)}</b><small>Ping</small></div>`
     : `<div class="num"><b>${info && info.err ? '✕' : '…'}</b><small>${info && info.err ? 'Offline' : 'Đang tải'}</small></div><div class="num"></div>`;
   return `<div><div class="nm">${name}${tag}${sv.password ? ' <span class="pw" title="Đã lưu mật khẩu">🔒</span>' : ''}</div>
-      <div class="ad">${esc(srvKey(sv))}${s && s.mode ? ' · ' + esc(s.mode) : ''}</div></div>
+      <div class="ad">${geoGet(sv) ? geoHtml(geoGet(sv)) + ' · ' : ''}${esc(srvKey(sv))}${s && s.mode ? ' · ' + esc(s.mode) : ''}</div></div>
     ${stats}
     <div class="btns">
       <button class="btn" data-act="pick" data-idx="${i}"><span class="ic" data-i="play"></span>Chọn</button>
@@ -503,7 +557,12 @@ function buildActivity() {
     if (st) { a.partyCurrent = st.players; a.partyMax = st.maxPlayers; a.partyId = `aether:${srvKey(sv)}`; }
     a.smallText = srvKey(sv);
   }
-  if (rpcMode === 'playing' && sv) {
+  if (rpcMode === 'offline') {
+    a.details = 'Đang chơi offline';
+    a.state = 'GTA San Andreas – cốt truyện';
+    a.startTimestamp = playStart;
+    delete a.partyCurrent; delete a.partyMax; delete a.partyId; delete a.smallText;
+  } else if (rpcMode === 'playing' && sv) {
     a.details = `Đang chơi ${(st && st.hostname) || label(sv)}`;
     a.state = `Nhân vật: ${normName(cfg.playerName)}`;
     a.startTimestamp = playStart;
@@ -538,15 +597,15 @@ function watchGame() {
     if (misses >= 2) { clearInterval(rpcPoll); rpcMode = 'idle'; rpcPush(true); }
   }, RPC_POLL_MS);
 }
-function rpcStartPlaying() {
-  rpcMode = 'playing'; playStart = Math.floor(Date.now() / 1000);
+function rpcStartPlaying(mode = 'playing') {
+  rpcMode = mode; playStart = Math.floor(Date.now() / 1000);
   if (!cfg.discordRpc) return;
   rpcPush(true); watchGame();
 }
 function rpcApplySetting() {
   clearTimeout(rpcTimer);
   if (!cfg.discordRpc) { clearInterval(rpcPoll); rpcLast = ''; invoke('discord_clear').catch(() => {}); return; }
-  if (rpcMode === 'playing') watchGame();
+  if (rpcMode !== 'idle') watchGame();
   rpcPush(true);
 }
 async function rpcHint() {
@@ -746,6 +805,128 @@ $('#btnSave').onclick = async () => {
   cfg.gtaPath = (await resolveExe($('#setPath').value)) || $('#setPath').value.trim(); cfg.playerName = name; cfg.discordRpc = $('#setRpc').checked;
   save(); rpcApplySetting(); toast('Đã lưu cài đặt'); go('play');
 };
+
+// =====================================================================
+// CHƠI OFFLINE + QUẢN LÝ SAVE (Rust: src-tauri/src/saves.rs)
+// =====================================================================
+let off = null, offBusy = false, offReq = 0;
+const offDirArg = () => cfg.saveDir || null;
+const fmtTime = ms => ms ? new Date(ms).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+const KIND = { manual: 'Thủ công', auto: 'Tự động', safety: 'An toàn' };
+
+async function offRefresh() {
+  const id = ++offReq;
+  try {
+    const r = await invoke('saves_info', { dir: offDirArg() });
+    if (id !== offReq) return;
+    off = r; offPaint();
+  } catch (e) { if (id === offReq) toast(String(e), 'err'); }
+}
+function offPaint() {
+  if (!off) return;
+  $('#offDir').value = off.dir;
+  const h = $('#offDirHint'); h.classList.remove('bad');
+  if (off.gameRunning) { h.textContent = 'GTA:SA đang chạy – tạm khoá các thao tác sửa/xoá save. Thoát game để tiếp tục.'; h.classList.add('bad'); }
+  else if (!off.dirExists) { h.textContent = 'Thư mục này chưa tồn tại (game sẽ tự tạo khi bạn lưu game lần đầu).'; }
+  else h.textContent = cfg.saveDir ? 'Đang dùng thư mục tuỳ chọn.' : 'Thư mục mặc định của GTA:SA (Documents\\GTA San Andreas User Files).';
+  $('#offAuto').checked = !!cfg.autoBackup;
+  const lock = off.gameRunning || offBusy;
+  $('#btnPlayOffline').disabled = offBusy;
+  setHtml($('#offSlots'), off.slots.map(s => {
+    const name = s.exists ? (s.name || 'Không có tên') : 'Trống';
+    const sub = !s.exists ? 'Chưa có save' : !s.valid ? `⚠ ${s.problem}` : `${fmtBytes(s.size)} · ${fmtTime(s.modifiedMs)}`;
+    const btns = (s.exists ? iconBtn('exp', s.slot, 'download', 'Xuất ra file…') : '') + iconBtn('imp', s.slot, 'upload', 'Nhập từ file…', lock ? 'dis' : '') + (s.exists ? iconBtn('del', s.slot, 'delete', 'Xoá save', 'danger' + (lock ? ' dis' : '')) : '');
+    return `<div class="item ${s.exists ? '' : 'off'} ${s.exists && !s.valid ? 'bad' : ''}"><span class="slot-no">${s.slot}</span><div class="it-main"><div class="it-name">${esc(name)}</div><div class="it-sub ${s.exists && !s.valid ? 'bad' : ''}">${esc(sub)}</div></div><div class="it-btns">${btns}</div></div>`;
+  }).join(''));
+  $$('#offSlots .dis').forEach(b => b.disabled = true);
+  $('#offBkCount').textContent = off.backups.length ? `(${off.backups.length})` : '';
+  setHtml($('#offBackups'), off.backups.length ? off.backups.map(b => {
+    const sub = `${fmtTime(b.createdMs)} · ${b.slots.length} slot (${b.slots.join(', ')}) · ${fmtBytes(b.size)}`;
+    const btns = iconBtn('rst', b.id, 'history', 'Khôi phục…', lock ? 'dis' : '') + iconBtn('bdel', b.id, 'delete', 'Xoá bản sao lưu', 'danger');
+    return `<div class="item"><div class="it-main"><div class="it-name"><span class="tag ${esc(b.kind)}">${esc(KIND[b.kind] || b.kind)}</span>${esc(b.label || 'Sao lưu')}</div><div class="it-sub">${esc(sub)}</div></div><div class="it-btns">${btns}</div></div>`;
+  }).join('') : '<div class="empty muted">Chưa có bản sao lưu nào.</div>');
+  $$('#offBackups .dis').forEach(b => b.disabled = true);
+  paintIcons($('#tab-offline'));
+}
+
+// Modal xác nhận dùng chung. body: HTML đã escape. Trả về Promise<boolean>.
+let offmDone = null;
+function offConfirm(title, body, okLabel = 'Đồng ý', danger = false) {
+  $('#offmTitle').textContent = title; $('#offmBody').innerHTML = body;
+  const ok = $('#offmOk'); ok.textContent = okLabel; ok.classList.toggle('danger', danger);
+  showBack($('#offModal'));
+  return new Promise(res => { offmDone = res; });
+}
+function offmClose(v) { hideBack($('#offModal')); const f = offmDone; offmDone = null; if (f) f(v); }
+$('#offmCancel').onclick = () => offmClose(false);
+$('#offmOk').onclick = () => offmClose(true);
+$('#offModal').onmousedown = e => { if (e.target.id === 'offModal') offmClose(false); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && offmDone) offmClose(false); });
+
+async function offDo(fn, okMsg) {
+  if (offBusy) return; offBusy = true; offPaint();
+  try { const r = await fn(); if (okMsg) toast(typeof okMsg === 'function' ? okMsg(r) : okMsg); }
+  catch (e) { toast(String(e), 'err'); }
+  finally { offBusy = false; await offRefresh(); offPaint(); }
+}
+
+$('#btnPlayOffline').onclick = async () => {
+  if (!cfg.gtaPath) { toast('Chưa thiết lập game – hãy chọn thư mục game có sẵn hoặc tải dữ liệu', 'err'); return openGameModal(); }
+  const b = $('#btnPlayOffline'); b.classList.add('loading');
+  await offDo(async () => {
+    const m = await invoke('play_offline', { exePath: cfg.gtaPath, dir: offDirArg(), autoBackup: !!cfg.autoBackup });
+    rpcStartPlaying('offline'); return m;
+  }, m => m);
+  b.classList.remove('loading');
+};
+$('#offAuto').onchange = () => { cfg.autoBackup = $('#offAuto').checked; save(); };
+$('#offOpenSaves').onclick = () => invoke('saves_open_folder', { dir: offDirArg(), which: 'saves' }).catch(e => toast(String(e), 'err'));
+$('#offOpenBk').onclick = () => invoke('saves_open_folder', { dir: null, which: 'backups' }).catch(e => toast(String(e), 'err'));
+$('#offDirPick').onclick = async () => {
+  const f = await pickFolder('Chọn thư mục chứa file save (GTASAsf1.b …)');
+  if (f) { cfg.saveDir = String(f); save(); offRefresh(); }
+};
+$('#offDirReset').onclick = () => { cfg.saveDir = ''; save(); offRefresh(); };
+$('#offBackup').onclick = () => offDo(async () => {
+  const label = $('#offBkLabel').value.trim(); const r = await invoke('saves_backup', { dir: offDirArg(), label });
+  $('#offBkLabel').value = ''; return r;
+}, 'Đã sao lưu save');
+
+$('#offSlots').onclick = async e => {
+  const bt = e.target.closest('button[data-act]'); if (!bt || bt.disabled) return;
+  const slot = Number(bt.dataset.idx), act = bt.dataset.act, info = off && off.slots.find(s => s.slot === slot);
+  if (act === 'exp') {
+    let dest = null;
+    try { dest = await T.dialog.save({ title: 'Xuất save', defaultPath: `GTASAsf${slot}.b`, filters: [{ name: 'GTA:SA save', extensions: ['b'] }] }); } catch (er) { return toast(String(er), 'err'); }
+    if (dest) offDo(() => invoke('saves_export', { dir: offDirArg(), slot, dest: String(dest) }), 'Đã xuất save');
+  } else if (act === 'imp') {
+    let src = null;
+    try { src = await T.dialog.open({ multiple: false, title: `Chọn file save để nhập vào slot ${slot}`, filters: [{ name: 'GTA:SA save', extensions: ['b'] }] }); } catch (er) { return toast(String(er), 'err'); }
+    if (!src) return;
+    const ok = !info || !info.exists || await offConfirm(`Ghi đè slot ${slot}?`, `Save hiện tại ở slot <b>${slot}</b> sẽ bị thay thế. Launcher tự tạo một bản sao lưu <b>an toàn</b> trước khi ghi đè nên bạn vẫn khôi phục lại được.`, 'Ghi đè', true);
+    if (ok) offDo(() => invoke('saves_import', { dir: offDirArg(), slot, src: String(src) }), `Đã nhập vào slot ${slot}`);
+  } else if (act === 'del') {
+    const ok = await offConfirm(`Xoá slot ${slot}?`, `Xoá save <b>${esc(info && info.name || 'slot ' + slot)}</b>. Một bản sao lưu <b>an toàn</b> được tạo trước khi xoá.`, 'Xoá', true);
+    if (ok) offDo(() => invoke('saves_delete_slot', { dir: offDirArg(), slot }), `Đã xoá slot ${slot}`);
+  }
+};
+
+$('#offBackups').onclick = async e => {
+  const bt = e.target.closest('button[data-act]'); if (!bt || bt.disabled) return;
+  const id = bt.dataset.idx, b = off && off.backups.find(x => x.id === id); if (!b) return;
+  if (bt.dataset.act === 'bdel') {
+    const ok = await offConfirm('Xoá bản sao lưu?', `Xoá vĩnh viễn <b>${esc(b.label || 'Sao lưu')}</b> (${esc(fmtTime(b.createdMs))}).`, 'Xoá', true);
+    if (ok) offDo(() => invoke('saves_delete_backup', { id }), 'Đã xoá bản sao lưu');
+  } else if (bt.dataset.act === 'rst') {
+    const rows = b.slots.map(n => `<label class="chk"><input type="checkbox" value="${n}" checked /><span>Slot ${n}</span></label>`).join('');
+    const ok = await offConfirm('Khôi phục save', `Chọn slot cần khôi phục từ <b>${esc(b.label || 'Sao lưu')}</b>. Save hiện tại sẽ được sao lưu <b>an toàn</b> trước khi bị thay thế.${rows}`, 'Khôi phục');
+    if (!ok) return;
+    const only = $$('#offmBody input:checked').map(i => Number(i.value));
+    if (!only.length) return toast('Chưa chọn slot nào', 'err');
+    offDo(() => invoke('saves_restore', { dir: offDirArg(), id, only: only.length === b.slots.length ? null : only }), r => `Đã khôi phục ${r.restored.length} slot`);
+  }
+};
+window.addEventListener('focus', () => { if (tab === 'offline' && !offmDone) offRefresh(); });
 
 // ---------- Khởi động ----------
 renderServerSelect(); buildServerList(); renderPlayers();

@@ -165,3 +165,25 @@ pub fn run(
         stderr.trim()
     ))
 }
+
+/// Chơi offline (single-player): chạy thẳng gta_sa.exe, KHÔNG nạp samp.dll nên không cần helper x86.
+/// Thư mục làm việc phải là thư mục game, nếu không game không tìm thấy dữ liệu.
+pub fn run_offline(exe_path: &str) -> Result<String, String> {
+    let dir = game_dir(exe_path).ok_or("Đường dẫn gta_sa.exe không hợp lệ hoặc file không tồn tại")?;
+    if game_running() {
+        return Err("GTA:SA đang chạy – hãy thoát game trước".into());
+    }
+    let exe = dir.join(
+        Path::new(exe_path)
+            .file_name()
+            .ok_or("Đường dẫn gta_sa.exe không hợp lệ")?,
+    );
+    let mut cmd = Command::new(&exe);
+    cmd.current_dir(&dir);
+    cmd.spawn().map_err(|e| match e.raw_os_error() {
+        Some(740) => "gta_sa.exe cần quyền Administrator – hãy chạy launcher bằng Run as administrator".to_string(),
+        Some(193) => "gta_sa.exe không chạy được trên hệ thống này (sai kiến trúc?)".to_string(),
+        _ => format!("Không chạy được gta_sa.exe: {e}"),
+    })?;
+    Ok("Đã khởi chạy GTA:SA (chơi offline)".into())
+}
