@@ -55,7 +55,7 @@ imgFallback('logoImg', 'logoTxt'); imgFallback('avatarImg', 'avatarTxt');
 // ---------- Cấu hình (localStorage) ----------
 // Server giờ là danh sách riêng: { name, host, port, password, encoding }, chọn bằng cfg.selected.
 // Link manifest.json của server dữ liệu game (xem DEPLOY-DATA-SERVER.md). Để nguyên giá trị mẫu = tắt tính năng tải dữ liệu.
-const DATA_MANIFEST_URL = 'https://data.example.com/aetherlaunch/manifest.json';
+const DATA_MANIFEST_URL = 'https://gtavn.huyt27871.workers.dev/manifest.json';
 const DATA_CONFIGURED = !/(^|\.)example\.com(\/|$)/i.test(DATA_MANIFEST_URL.replace(/^https?:\/\//i, ''));
 const KEY = 'samp-launcher.v1';
 const ENC = 'windows-1252';
